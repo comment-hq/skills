@@ -1,0 +1,628 @@
+#!/usr/bin/env sh
+# ensure-session-identity — idempotently give THIS agent session a named,
+# session-scoped Comment.io "ethereal" identity, lazily minting one the first
+# time it is needed and reusing it on every later call within the same session.
+#
+# Runtime-generic: pure POSIX sh + curl + python3. Any agent (Claude Code,
+# Codex, a bare shell) can call it. It does NOT print secrets.
+#
+# Contract / exit codes:
+#   0  identity ready    — prints: "OK <handle> <credfile>" on stdout.
+#                          The caller reads agent_secret from <credfile> (0600);
+#                          it is NEVER written to stdout.
+#   2  no ark key        — owner registration key unavailable; caller should
+#                          fall back to anonymous (per-doc token). Not an error.
+#   3  no session key     — no stable per-session id; prints how to set one on
+#                          stderr and refuses to mint (minting on an unstable key
+#                          would re-mint a fresh handle every turn). Fail loud.
+#   1  mint/other error   — see stderr.
+#
+# Flags:
+#   --session KEY   override the session key (else COMMENT_IO_SESSION_ID, then
+#                   CODEX_THREAD_ID/CODEX_SESSION_ID, then CLAUDE_CODE_SESSION_ID).
+#   --name NAME     mint with this display name (else server assigns a human
+#                   first name as a placeholder; refine later via PATCH /agents/me).
+#   --base URL      override the API base (else the COMMENT_IO_ENV cascade).
+#   --print-secret  ALSO print "SECRET <agent_secret>" — opt-in, for trusted
+#                   non-interactive callers only; off by default.
+#
+# Test seam: set COMMENT_IO_CURL to a stub command to avoid real network.
+
+set +x 2>/dev/null || true   # never trace: keeps ark_/as_ out of any xtrace log
+umask 077                    # any file we create is owner-only by default
+
+SESS=""
+NAME=""
+BASE_OVERRIDE=""
+PRINT_SECRET=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session) [ $# -ge 2 ] || { echo "ensure-session-identity: --session needs a value" >&2; exit 1; }; SESS="$2"; shift 2 ;;
+    --name)    [ $# -ge 2 ] || { echo "ensure-session-identity: --name needs a value" >&2; exit 1; }; NAME="$2"; shift 2 ;;
+    --base)    [ $# -ge 2 ] || { echo "ensure-session-identity: --base needs a value" >&2; exit 1; }; BASE_OVERRIDE="$2"; shift 2 ;;
+    --print-secret) PRINT_SECRET=1; shift ;;
+    *) echo "ensure-session-identity: unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+
+CURL="${COMMENT_IO_CURL:-curl}"
+
+# Remove the lock + any secret-bearing temp files. Used by both the normal EXIT
+# trap and the INT/TERM traps (which must clean up AND exit, since POSIX sh would
+# otherwise resume the script after the trap and run the mint without its lock).
+_cleanup() {
+  # Remove the lock ONLY if WE still own it (first field == our PID). A blind
+  # rm could, when _cleanup runs twice (a signal trap that exits also fires the
+  # EXIT trap), delete a DIFFERENT process's freshly-acquired lock in the handoff
+  # window and let it double-mint. LOCK_MK/HDR/RESP are PID-named temps, safe to
+  # remove unconditionally.
+  if [ -n "${LOCK_FILE:-}" ]; then
+    # shellcheck disable=SC2046  # intentional split of "<pid> <epoch>" into $1/$2
+    set -- $(cat "$LOCK_FILE" 2>/dev/null)
+    [ "${1:-}" = "$$" ] && rm -f "$LOCK_FILE"
+  fi
+  if [ -n "${LOCK_MK:-}" ]; then rm -f "$LOCK_MK"; fi
+  if [ -n "${HDR_FILE:-}" ]; then rm -f "$HDR_FILE"; fi
+  if [ -n "${RESP_FILE:-}" ]; then rm -f "$RESP_FILE"; fi
+}
+
+# --- resolve state root + API base (same cascade as the CLI/listen hook) -----
+env_is_staging() { [ "$(printf '%s' "${COMMENT_IO_ENV:-}" | tr '[:upper:]' '[:lower:]')" = staging ]; }
+
+# Guard against sending the owner ark_ key to an arbitrary host: a mistyped or
+# prompt-injected --base/COMMENT_IO_BASE_URL must not exfiltrate the capability.
+# Allow only known Comment.io origins over https, plus localhost for dev. Host is
+# parsed (not glob-matched) so https://evil.com/.comt.dev cannot slip through.
+# On approval, PRINT the bare origin (scheme://host[:port]) — dropping any
+# path/query/fragment (e.g. a pasted share URL carrying a token) and rejecting
+# userinfo, so a credential is never sent to the wrong endpoint. Exit 1 if bad.
+normalize_base() {
+  printf '%s' "$1" | python3 -c '
+import sys, urllib.parse
+u = urllib.parse.urlparse(sys.stdin.read().strip())
+host = (u.hostname or "").lower(); scheme = u.scheme.lower()
+if u.username or u.password or not host:
+    sys.exit(1)
+local = host in ("localhost", "127.0.0.1", "::1")
+https_ok = (host == "comment.io" or host == "www.comment.io" or host == "comt.dev" or host.endswith(".comt.dev")
+            or host == "toofs.us" or host.endswith(".toofs.us"))  # *.botlets.dev excluded: legacy 301-redirect
+if (local and scheme in ("http", "https")) or (scheme == "https" and https_ok):
+    netloc = u.netloc.split("@", 1)[-1]   # drop any userinfo (already rejected; defensive)
+    print(scheme + "://" + netloc)
+    sys.exit(0)
+sys.exit(1)
+'
+}
+
+# Capture the ark key from the environment and scrub it NOW — before ANY
+# subprocess below (tr in env_is_staging, python in normalize_base, curl) can
+# inherit it via /proc/<pid>/environ. Unexport ARK first so an inherited exported
+# ARK cannot keep the export attribute. $ARK is an unexported shell var hereafter.
+unset ARK 2>/dev/null || true
+ARK="${COMMENT_IO_ARK_KEY:-}"
+unset COMMENT_IO_ARK_KEY 2>/dev/null || true
+
+# Prefer the Go CLI for NO-ARK sessions: `comment ephemeral ensure` has the
+# daemon-socket and Docker (`docker exec`) mint paths this POSIX helper lacks,
+# and its stdout/exit contract matches ours exactly ("OK <handle> <credfile>",
+# optional "SECRET <secret>", exit 2 = anonymous, 3 = no session key). We delegate
+# ONLY when there is NO ark key: that is exactly when the CLI's daemon/Docker
+# paths add value (with an ark key the helper's own curl mint below already
+# works, and the CLI itself prefers the ark path too), and it means the long-lived
+# ark key is NEVER passed into the delegated process — preserving the helper's
+# no-env-exposure guarantee (no re-export, no key in `env` argv or /proc/environ).
+# Runs after the scrub, so the probe inherits no key either. Probe with
+# `comment ephemeral --help` (NOT `ensure --help`: ensure parses --help via Go's
+# flag package and exits non-zero); grep confirms the subcommand. The CLI
+# re-validates the base against the same approved-origins allowlist. Skipped under
+# the COMMENT_IO_CURL test seam.
+if [ -z "$ARK" ] && [ -z "${COMMENT_IO_CURL:-}" ] && command -v comment >/dev/null 2>&1 && comment ephemeral --help 2>/dev/null | grep -q 'ephemeral ensure'; then
+  set -- ephemeral ensure
+  [ -n "$SESS" ] && set -- "$@" --session "$SESS"
+  [ -n "$NAME" ] && set -- "$@" --name "$NAME"
+  [ -n "$BASE_OVERRIDE" ] && set -- "$@" --base-url "$BASE_OVERRIDE"
+  [ -n "$PRINT_SECRET" ] && set -- "$@" --print-secret
+  exec comment "$@"
+fi
+
+# Credential/state home — resolved EXACTLY like the Claude wake hook
+# (comment-rewake-listen): COMMENT_IO_HOME, else the COMMENT_IO_ENV cascade. The
+# bind pointer + cred we write must land where that hook reads them, so do NOT
+# derive the home from --base: the hook is base-unaware, and a split home would
+# silently break @mention wakes. To target staging, set COMMENT_IO_ENV=staging
+# (or COMMENT_IO_HOME) so home, base, AND the hook all agree.
+CIO_HOME="${COMMENT_IO_HOME:-}"
+if [ -z "$CIO_HOME" ]; then
+  if env_is_staging; then CIO_HOME="$HOME/.comment-io-staging"; else CIO_HOME="$HOME/.comment-io"; fi
+fi
+
+if [ -n "$BASE_OVERRIDE" ]; then
+  BASE="$BASE_OVERRIDE"
+elif env_is_staging; then
+  BASE="${COMMENT_IO_STAGING_BASE_URL:-${COMMENT_IO_BASE_URL:-https://comt.dev}}"
+else
+  BASE="${COMMENT_IO_BASE_URL:-https://comment.io}"
+fi
+# Validate + normalize the base to its bare origin up front — before reuse OR
+# mint. This stops exfiltrating the ark key (or a reused secret) to a bad host,
+# and drops any path/query (a pasted share URL token) so it never reaches the
+# wrong endpoint. Approved origins only; localhost for dev.
+if ! BASE="$(normalize_base "$BASE")"; then
+  echo "ensure-session-identity: refusing an unapproved/invalid base — would expose a credential. Approved origins: comment.io, *.comt.dev, *.toofs.us, localhost." >&2
+  exit 1
+fi
+
+# --- resolve a STABLE session key ---------------------------------------------
+# An unstable key (e.g. a fresh uuid per invocation) would mint a new handle
+# every turn, leaking account-level secrets and exhausting the per-owner cap.
+# Precedence: explicit/daemon override, then the MOST specific runtime unit.
+# Codex thread beats Claude session, because a Codex thread launched under a
+# Claude session has both set — and the actual per-session unit is the Codex
+# thread (using the Claude id there would alias distinct threads together).
+[ -n "$SESS" ] || SESS="${COMMENT_IO_SESSION_ID:-}"
+[ -n "$SESS" ] || SESS="${CODEX_THREAD_ID:-}"      # Codex provides a stable thread id
+[ -n "$SESS" ] || SESS="${CODEX_SESSION_ID:-}"
+[ -n "$SESS" ] || SESS="${CLAUDE_CODE_SESSION_ID:-}"
+
+# --- resolve the owner ark_ key (env wins, else config.env) -------------------
+# ARK was captured + scrubbed from the environment at the top. If it was not in
+# the environment, fall back to config.env (a file read — no env exposure).
+if [ -z "$ARK" ] && [ -f "$CIO_HOME/config.env" ]; then
+  ARK="$(grep -E '^COMMENT_IO_ARK_KEY=' "$CIO_HOME/config.env" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+fi
+
+# With no stable session key we can neither reuse nor safely mint. Prefer the
+# anonymous fallback (exit 2) when minting is impossible anyway (no ark); only
+# ask for a session key (exit 3) when an ark key IS present so minting could work.
+if [ -z "$SESS" ]; then
+  if [ -z "$ARK" ]; then
+    echo "ensure-session-identity: no ark key and no session key — staying anonymous (set COMMENT_IO_ARK_KEY and a stable session id to get a named identity)." >&2
+    exit 2
+  fi
+  cat >&2 <<EOF
+ensure-session-identity: no stable session key.
+Set ONE of these to a value that stays constant for this whole agent session,
+then re-run (do not generate a random one per call):
+  COMMENT_IO_SESSION_ID   (recommended for non-Claude runtimes; daemon sets it)
+  CODEX_THREAD_ID         (set automatically inside Codex)
+  CLAUDE_CODE_SESSION_ID  (set automatically inside Claude Code)
+Or pass --session <stable-id>.
+EOF
+  exit 3
+fi
+
+# Build a collision-free, filesystem-safe key. A key that is ALREADY safe is used
+# verbatim (so a Claude UUID matches what the asyncRewake hook reads: bind-<id>).
+# A key with any other character is hashed — a lossy tr would map distinct keys
+# (e.g. job/a and job:a) onto the same bind/lock files and cross-wire sessions.
+case "$SESS" in
+  *[!A-Za-z0-9._-]*)
+    SESS_SAFE="h-$(printf '%s' "$SESS" | python3 -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:40])')" ;;
+  *)
+    SESS_SAFE="$SESS" ;;
+esac
+
+REWAKE_DIR="$CIO_HOME/rewake"
+ETHEREAL_DIR="$CIO_HOME/ethereal"
+BIND_FILE="$REWAKE_DIR/bind-$SESS_SAFE"
+LOCK_FILE="$REWAKE_DIR/.ensure-$SESS_SAFE.lock"
+# Create the store leniently so reuse-reads + the lock can operate.
+mkdir -p "$REWAKE_DIR" "$ETHEREAL_DIR" 2>/dev/null || true
+# harden_perms is a SECURITY check that must pass BEFORE we trust any existing
+# credential: a group/world-writable store lets a local user swap the bind/cred
+# for an attacker token. chmod first (fixes dirs we own), then verify. It does
+# NOT check writability — that gates minting only (check_writable), so a no-ark
+# read-only/insecure store still degrades to anonymous.
+harden_perms() {
+  # Exit 0 = secured (and any previously-tamperable contents PURGED); reuse-safe.
+  #      1 = could not secure (still group/world-writable; cannot mint).
+  # Threat is group/world WRITE (planting/replacing bind+cred), so key on 0o022;
+  # chmod to 0700 anyway as defense in depth (the cred JSON itself is 0600).
+  D1="$REWAKE_DIR" D2="$ETHEREAL_DIR" python3 -c '
+import os, sys
+dirs = [os.environ["D1"], os.environ["D2"]]
+was_writable = []
+for d in dirs:
+    # Reject a symlink BEFORE any stat/chmod that would follow it into attacker space.
+    if os.path.islink(d):
+        sys.exit(1)
+    w = True
+    try:
+        w = bool(os.stat(d).st_mode & 0o022)
+    except OSError:
+        w = True
+    was_writable.append((d, w))
+    try:
+        os.chmod(d, 0o700)
+    except OSError:
+        pass
+for d in dirs:
+    try:
+        if os.path.islink(d):        # re-check after chmod (defence against a swap)
+            sys.exit(1)
+        st = os.stat(d)
+        if st.st_mode & 0o022:        # still group/world-writable
+            sys.exit(1)
+        if st.st_uid != os.getuid():  # owned by another user (its owner can plant)
+            sys.exit(1)
+    except OSError:
+        sys.exit(1)
+# Purge planted bind/cred files from any dir that WAS writable, so a later run
+# (seeing the now-secure mode) cannot trust a laundered attacker credential.
+for d, w in was_writable:
+    if not w:
+        continue
+    try:
+        for n in os.listdir(d):
+            if n.startswith("bind-") or n.endswith(".json"):
+                try:
+                    os.remove(os.path.join(d, n))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+sys.exit(0)
+' 2>/dev/null
+}
+check_writable() {
+  # A one-time agent_secret we cannot persist is a lost secret + a consumed slot.
+  if [ ! -d "$REWAKE_DIR" ] || [ ! -w "$REWAKE_DIR" ] || [ ! -d "$ETHEREAL_DIR" ] || [ ! -w "$ETHEREAL_DIR" ]; then
+    echo "ensure-session-identity: credential store not writable ($ETHEREAL_DIR / $REWAKE_DIR); fix COMMENT_IO_HOME permissions before minting." >&2
+    return 1
+  fi
+  return 0
+}
+# Verify store permissions up front — BEFORE trusting any existing credential.
+harden_perms; STORE_SECURE=$?
+
+# Arm the Claude asyncRewake hook, which reads ONLY rewake/bind-$CLAUDE_CODE_SESSION_ID.
+# Our reuse/lock key may be a higher-precedence id (daemon/Codex) even inside a
+# Claude session, so when CLAUDE_CODE_SESSION_ID is set, ALSO write its bind so
+# @mentions actually wake the session. No-op outside Claude.
+arm_claude_hook_bind() {  # $1 = handle
+  cc="${CLAUDE_CODE_SESSION_ID:-}"
+  [ -n "$cc" ] || return 0
+  # Sanitize before using cc in a filename — an injected ../.. value would write
+  # outside REWAKE_DIR. A real Claude UUID is all-safe chars so it passes through
+  # (and still matches what the asyncRewake hook reads, bind-<id>).
+  case "$cc" in *[!A-Za-z0-9._-]*) cc="h-$(printf '%s' "$cc" | python3 -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:40])')" ;; esac
+  ccbind="$REWAKE_DIR/bind-$cc"
+  [ "$(cat "$ccbind" 2>/dev/null)" = "$1" ] && return 0
+  _tmp="$ccbind.tmp.$$"
+  if printf '%s' "$1" > "$_tmp" 2>/dev/null; then mv "$_tmp" "$ccbind" 2>/dev/null || rm -f "$_tmp"; fi
+}
+
+# --- reuse: is there already a live identity bound to this session? ----------
+# Prints "OK <handle> <credfile>" and returns 0 when a valid, unexpired cred
+# exists for the handle named in the bind file; returns 1 otherwise.
+# Returns 0 and prints "OK <handle> <credfile>" when a live identity for this
+# session exists. Fast path: bind pointer -> handle -> cred. Reclaim path: if the
+# bind pointer is missing/stale (e.g. a prior bind-write failed, or a non-Claude
+# session left no cleanup), scan for a cred stamped with THIS session and rebuild
+# the bind pointer — so a bind-write failure can never orphan a minted handle.
+try_reuse() {
+  _h="$(BIND_FILE="$BIND_FILE" ETHEREAL_DIR="$ETHEREAL_DIR" SESS="$SESS" BASE="$BASE" python3 - <<'PY'
+import json, os, sys, datetime, glob, tempfile, re
+bind = os.environ["BIND_FILE"]; ed = os.environ["ETHEREAL_DIR"]; sess = os.environ["SESS"]
+base = os.environ.get("BASE", "")
+HANDLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*[.]e-[0-9a-f]{8}$")
+SECRET_RE = re.compile(r"^as_[A-Za-z0-9._-]+$")
+
+def same_base(rec):
+    # Never reuse a cred minted for a different deployment: sending that as_ to
+    # the current host would leak it cross-env or fail. Ethereal creds always
+    # store base_url (this helper and /listen both write it). Normalize trailing
+    # slashes on BOTH sides (/listen does not strip them) so a slash-only
+    # difference still matches; a missing/blank base_url stays non-reusable.
+    b = (rec.get("base_url") or "").rstrip("/")
+    return b != "" and b == base.rstrip("/")
+TTL_S = 30 * 24 * 3600        # server ethereal TTL window (idle), approx
+REFRESH_S = 7 * 24 * 3600     # push the local hint out when under this much remains
+NOW = datetime.datetime.now(datetime.timezone.utc)
+
+def remaining(rec):
+    # seconds until the LOCAL hint expires; None when unparseable/absent
+    exp = rec.get("expires_at") or ""
+    if not exp:
+        return None
+    try:
+        e = datetime.datetime.fromisoformat(exp.replace("Z", "+00:00"))
+        if e.tzinfo is None:
+            e = e.replace(tzinfo=datetime.timezone.utc)
+        return (e - NOW).total_seconds()
+    except Exception:
+        return None
+
+def live(rec):
+    if not rec.get("agent_secret") or not rec.get("handle"):
+        return False
+    r = remaining(rec)
+    if r is None:
+        return True   # unparseable/absent expiry → server is the source of truth
+    return r > 0
+
+def valid_handle(handle):
+    return bool(HANDLE_RE.fullmatch(handle or "")) and ".." not in (handle or "")
+
+def reusable(rec, expected_handle):
+    handle = rec.get("handle") or ""
+    secret = rec.get("agent_secret") or ""
+    if expected_handle and handle != expected_handle:
+        return False
+    if rec.get("identity_class") != "ethereal":
+        return False
+    if not valid_handle(handle) or not SECRET_RE.fullmatch(secret):
+        return False
+    if rec.get("session") != sess:
+        return False
+    return live(rec) and same_base(rec)
+
+def refresh(cred, rec):
+    # The server extends the TTL from last_seen_at on every authenticated use.
+    # Reusing this cred means the session is active, so optimistically push the
+    # LOCAL hint out when it is near expiry — keeps a long-running session from
+    # being rejected locally while the server still considers the handle live.
+    r = remaining(rec)
+    if r is None or r > REFRESH_S:
+        return
+    rec2 = dict(rec)
+    rec2["expires_at"] = (NOW + datetime.timedelta(seconds=TTL_S)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    try:
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(cred))
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(rec2, f)
+        os.replace(tmp, cred)
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+
+# fast path: bind -> handle -> cred
+handle = ""
+try:
+    with open(bind) as f:
+        handle = f.read().strip()
+except Exception:
+    handle = ""
+if handle:
+    if valid_handle(handle):
+        cred = os.path.join(ed, handle + ".json")
+    else:
+        cred = ""
+    if cred and os.path.exists(cred):
+        try:
+            rec = json.load(open(cred))
+            if reusable(rec, handle):
+                refresh(cred, rec)
+                print(handle); sys.exit(0)
+        except Exception:
+            pass
+
+# reclaim path: a cred stamped with this session, still live, but no usable bind
+if sess:
+    for p in sorted(glob.glob(os.path.join(ed, "*.json"))):
+        try:
+            rec = json.load(open(p))
+        except Exception:
+            continue
+        expected = os.path.basename(p)[:-5] if os.path.basename(p).endswith(".json") else ""
+        if reusable(rec, expected):
+            h = rec["handle"]
+            try:
+                bfd, btmp = tempfile.mkstemp(dir=os.path.dirname(bind))
+                with os.fdopen(bfd, "w") as f:
+                    f.write(h)
+                os.replace(btmp, bind)
+            except Exception:
+                try: os.unlink(btmp)
+                except Exception: pass
+                continue  # could not rebuild bind; do not claim reuse
+            refresh(p, rec)
+            print(h); sys.exit(0)
+sys.exit(1)
+PY
+)" || return 1
+  [ -n "$_h" ] || return 1
+  _cred="$ETHEREAL_DIR/$_h.json"
+  arm_claude_hook_bind "$_h"
+  printf 'OK %s %s\n' "$_h" "$_cred"
+  if [ -n "$PRINT_SECRET" ]; then
+    SECRET="$(CRED="$_cred" python3 -c 'import json,os;print(json.load(open(os.environ["CRED"]))["agent_secret"])')"
+    printf 'SECRET %s\n' "$SECRET"
+  fi
+  return 0
+}
+
+# Reuse ONLY from a secured store (STORE_SECURE==0; harden has purged any
+# previously-tamperable contents, so what remains is safe to trust).
+if [ "${STORE_SECURE:-1}" -eq 0 ] && try_reuse; then exit 0; fi
+
+# No ark key ⇒ cannot mint. Degrade to anonymous (exit 2) regardless of store
+# state, so a no-ark user never hard-fails on an unusable/insecure store.
+if [ -z "$ARK" ]; then
+  echo "ensure-session-identity: no ark key (set COMMENT_IO_ARK_KEY or add it to $CIO_HOME/config.env; reveal one at $BASE/settings). Staying anonymous." >&2
+  exit 2
+fi
+# Minting needs a secured store (0) AND writable. Only an unsecurable store (1,
+# group/world-writable and not ours to chmod) blocks.
+if [ "${STORE_SECURE:-1}" -eq 1 ]; then
+  echo "ensure-session-identity: $REWAKE_DIR / $ETHEREAL_DIR are group/world-accessible; refusing to store secrets there (chmod 700 them)." >&2
+  exit 1
+fi
+check_writable || exit 1
+
+# --- acquire a per-session lock so concurrent turns don't double-mint --------
+# Lock contents = "<pid> <epoch>". A lock is stale when:
+#  - contents are empty/malformed (holder killed mid-write — defensive), OR
+#  - the holder PID is dead, OR
+#  - the holder PID is ALIVE but the lock is older than the wait window. A
+#    legitimate mint cannot run that long (it is bounded by curl --max-time
+#    below), so an old "live" lock means PID reuse, not a real mint — stealing
+#    it is safe and avoids wedging identity forever on a recycled PID.
+lock_is_stale() {  # $1 = lock contents
+  set -- $1
+  _lpid="${1:-}"; _lts="${2:-}"
+  case "$_lpid" in ''|*[!0-9]*) return 0 ;; esac        # empty / malformed → stale
+  ! kill -0 "$_lpid" 2>/dev/null && return 0            # dead holder → stale
+  case "$_lts" in ''|*[!0-9]*) return 1 ;; esac         # alive, no usable ts → live
+  _now="$(date +%s 2>/dev/null || echo 0)"
+  [ "$_now" -gt 0 ] && [ "$((_now - _lts))" -gt "$LOCK_WAIT_S" ]   # alive but too old → PID reuse
+}
+# Create the lock ATOMICALLY WITH its content via hardlink: ln fails if the
+# target exists (exclusive, like O_EXCL) and the file already holds the pid+epoch,
+# so the lock is never observed empty — closing the killed-between-create-and-write
+# race that a plain noclobber-then-printf would open.
+LOCK_MK="$LOCK_FILE.mk.$$"
+printf '%s %s\n' "$$" "$(date +%s 2>/dev/null || echo 0)" > "$LOCK_MK" 2>/dev/null || { echo "ensure-session-identity: cannot prepare lock in $REWAKE_DIR" >&2; exit 1; }
+# LOCK_MK-only cleanup until we own the lock (the full _cleanup traps replace
+# these once acquired). INT/TERM must EXIT — otherwise POSIX sh resumes the wait
+# loop and a cancelled command could still mint after being signaled.
+trap 'rm -f "$LOCK_MK"' EXIT
+trap 'trap - EXIT; rm -f "$LOCK_MK"; exit 130' INT
+trap 'trap - EXIT; rm -f "$LOCK_MK"; exit 143' TERM
+# Wait at least as long as a legitimate mint can take (curl --max-time 60 below)
+# plus margin, so a second concurrent caller waits for the in-flight mint and
+# reuses it rather than erroring out. Time-based (date) so it does not depend on
+# sleep granularity; a high iteration cap is just an infinite-loop backstop for
+# the unlikely case date is unavailable.
+LOCK_WAIT_S=90
+start="$(date +%s 2>/dev/null || echo 0)"
+acquired=""
+i=0
+while [ "$i" -lt 1000 ]; do
+  if ln "$LOCK_MK" "$LOCK_FILE" 2>/dev/null; then acquired=1; break; fi
+  # Contended. Only consider stealing a stale (dead/empty) holder, and do it
+  # race-free: atomically rename the file away first — only the winning rename
+  # owns it, so two stealers can never both delete a lock (which would
+  # double-mint). Re-confirm staleness on what we claimed; if it turns out live
+  # (someone re-created it), put it back.
+  if lock_is_stale "$(cat "$LOCK_FILE" 2>/dev/null)"; then
+    steal_tmp="$LOCK_FILE.steal.$$"
+    if mv "$LOCK_FILE" "$steal_tmp" 2>/dev/null; then
+      if lock_is_stale "$(cat "$steal_tmp" 2>/dev/null)"; then
+        rm -f "$steal_tmp"                                            # dead/empty: drop it
+      else
+        # Turned out live: restore ONLY if no new owner appeared. ln won't clobber
+        # an existing $LOCK_FILE, so we never overwrite a fresh lock (which would
+        # let two processes both believe they hold it). Drop our copy either way.
+        ln "$steal_tmp" "$LOCK_FILE" 2>/dev/null; rm -f "$steal_tmp"
+      fi
+    fi
+    continue
+  fi
+  sleep 0.25 2>/dev/null || sleep 1
+  if [ "${STORE_SECURE:-1}" -eq 0 ] && try_reuse; then rm -f "$LOCK_MK"; exit 0; fi
+  now="$(date +%s 2>/dev/null || echo 0)"
+  if [ "$start" -gt 0 ] && [ "$now" -gt 0 ] && [ "$((now - start))" -ge "$LOCK_WAIT_S" ]; then break; fi
+  i=$((i + 1))
+done
+rm -f "$LOCK_MK"                          # the lock (if acquired) is its own hardlink now
+if [ -z "$acquired" ]; then
+  echo "ensure-session-identity: could not acquire mint lock ($LOCK_FILE); another mint may be stuck. Remove it if stale." >&2
+  exit 1
+fi
+# Clean up the lock + temp files on exit, AND on a signal: the INT/TERM traps
+# must exit (POSIX sh would otherwise resume the script after the trap and run
+# the mint without holding its lock, allowing a concurrent double-mint).
+trap '_cleanup' EXIT
+trap 'trap - EXIT; _cleanup; exit 130' INT
+trap 'trap - EXIT; _cleanup; exit 143' TERM
+
+# Double-checked: a racer may have finished between our last check and the lock
+# (only trust an already-secure store — same guard as the fast path).
+if [ "${STORE_SECURE:-1}" -eq 0 ] && try_reuse; then exit 0; fi
+
+# --- mint ---------------------------------------------------------------------
+# Pass the ark_ key via a 0600 header file, NOT argv (argv is visible in ps /
+# /proc/<pid>/cmdline to same-user processes).
+HDR_FILE="$(mktemp "${TMPDIR:-/tmp}/csi-hdr.XXXXXX")" || { echo "ensure-session-identity: mktemp failed" >&2; exit 1; }
+printf 'Authorization: Bearer %s\n' "$ARK" > "$HDR_FILE"   # cleaned by _cleanup trap
+
+if [ -n "$NAME" ]; then
+  BODY="$(NAME="$NAME" python3 -c 'import json,os;print(json.dumps({"display_name":os.environ["NAME"]}))')"
+else
+  BODY='{}'
+fi
+
+# Capture the response (which contains agent_secret) into a 0600 file, not a
+# shell var passed via the child's environment — /proc/<pid>/environ is readable
+# by same-user processes (same leak class as argv, which we already avoid).
+RESP_FILE="$(mktemp "${TMPDIR:-/tmp}/csi-resp.XXXXXX")" || { echo "ensure-session-identity: mktemp failed" >&2; exit 1; }
+# --max-time bounds the request so the lock holder can never hang indefinitely
+# (a live-but-hung mint is what makes age-based lock stealing unsafe).
+"$CURL" -s --connect-timeout 15 --max-time 60 -X POST "$BASE/agents/ephemeral" --header @"$HDR_FILE" -H 'Content-Type: application/json' -d "$BODY" > "$RESP_FILE"   # both cleaned by _cleanup trap
+rm -f "$HDR_FILE"
+
+# --- persist cred (0600) AND bind pointer, atomically in one python block ----
+HANDLE="$(RESP_FILE="$RESP_FILE" ETHEREAL_DIR="$ETHEREAL_DIR" BIND_FILE="$BIND_FILE" BASE="$BASE" SESS="$SESS" python3 - <<'PY'
+import json, os, sys, tempfile, re
+with open(os.environ["RESP_FILE"]) as _f:
+    resp = _f.read()
+try:
+    r = json.loads(resp)
+except Exception:
+    sys.exit(0)  # non-JSON (WAF/error) → empty handle → caller errors out
+secret = r.get("agent_secret") or ""
+handle = r.get("handle") or ""
+# Validate shapes before trusting them: handle becomes a filename (reject path
+# traversal / separators) and secret becomes an Authorization header value
+# (reject anything that is not the expected token charset).
+if not re.fullmatch(r"as_[A-Za-z0-9._-]+", secret):
+    sys.exit(0)
+if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[.]e-[0-9a-f]{8}", handle) or ".." in handle:
+    sys.exit(0)
+rec = {
+    "handle": handle,
+    "agent_secret": secret,
+    "identity_class": "ethereal",
+    "display_name": r.get("display_name", ""),
+    "expires_at": r.get("expires_at", ""),
+    "base_url": r.get("base_url") or os.environ["BASE"],
+    "owner": r.get("owner", ""),
+    "session": os.environ.get("SESS", ""),  # lets try_reuse reclaim if bind is lost
+}
+ed = os.environ["ETHEREAL_DIR"]
+cred = os.path.join(ed, handle + ".json")
+# atomic write of the cred file at 0600
+fd, tmp = tempfile.mkstemp(dir=ed)
+try:
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(rec, f)
+    os.replace(tmp, cred)
+except Exception:
+    try: os.unlink(tmp)
+    except Exception: pass
+    sys.exit(0)
+# only AFTER the cred exists, write the session->handle bind pointer atomically
+bind = os.environ["BIND_FILE"]
+bfd, btmp = tempfile.mkstemp(dir=os.path.dirname(bind))
+try:
+    with os.fdopen(bfd, "w") as f:
+        f.write(handle)
+    os.replace(btmp, bind)
+except Exception:
+    try: os.unlink(btmp)
+    except Exception: pass
+    # cred exists but bind failed; the next call reclaims it via try_reuse and the
+    # session-stamped scan (no orphaned handle). Report none for this call.
+    sys.exit(0)
+print(handle)
+PY
+)"
+rm -f "$RESP_FILE"
+
+if [ -z "$HANDLE" ]; then
+  # Do NOT echo $RESP — it may contain the agent_secret on partial success.
+  echo "ensure-session-identity: mint failed (no handle). Check the ark key at $BASE/settings and retry." >&2
+  exit 1
+fi
+
+CRED="$ETHEREAL_DIR/$HANDLE.json"
+arm_claude_hook_bind "$HANDLE"
+printf 'OK %s %s\n' "$HANDLE" "$CRED"
+if [ -n "$PRINT_SECRET" ]; then
+  SECRET="$(CRED="$CRED" python3 -c 'import json,os;print(json.load(open(os.environ["CRED"]))["agent_secret"])')"
+  printf 'SECRET %s\n' "$SECRET"
+fi
+exit 0

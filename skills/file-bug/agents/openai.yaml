@@ -1,0 +1,4 @@
+interface:
+  display_name: "File Bug"
+  short_description: "Investigate a report and file a well-formed GitHub issue"
+  default_prompt: "Use $file-bug to turn this into a GitHub issue: gather the context needed to understand and reproduce it, then draft the issue for my review before filing."

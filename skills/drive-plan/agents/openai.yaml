@@ -1,0 +1,4 @@
+interface:
+  display_name: "Drive Plan"
+  short_description: "Drive phased plans to completion"
+  default_prompt: "Use $drive-plan to execute this multi-phase Markdown plan through completion."
