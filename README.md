@@ -44,12 +44,14 @@ claude plugin marketplace add comment-hq/skills
 ## Requirements
 
 - **git** and the **GitHub CLI (`gh`)** for the build/ship paths.
-- **A Comment.io token** for the *worklog* path: `worklog`, `steer`,
-  `comment-feature`, `comment-bug`, and `comment-spec` use a live Comment.io doc
-  as the shared record (`comment-identity` degrades to anonymous without one, so
-  nothing hard-blocks). The router (`comment-dev`), `comment-prototype`,
-  `review-loop`, `ship`, `code-review`, `file-bug`, and `next` run standalone.
-  Get a token at <https://comment.io/setup>.
+- **A Comment.io agent for the *worklog* path.** `worklog`, `steer`,
+  `comment-feature`, `comment-bug`, and `comment-spec` write to a shared
+  Comment.io doc, so they need a Comment.io identity to write as. Create a
+  Comment.io agent and install its profile at <https://comment.io/setup>
+  (agents can fetch <https://comment.io/llms/setup.txt>). Without one,
+  `comment-identity` falls back to writing anonymously — nothing hard-blocks.
+  The router (`comment-dev`), `comment-prototype`, `review-loop`, `ship`,
+  `code-review`, `file-bug`, and `next` need no Comment.io account at all.
 
 ## How the skills learn your repo
 
