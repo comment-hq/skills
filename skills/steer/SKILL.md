@@ -16,7 +16,7 @@ description: >-
 
 `steer` always polls at checkpoints. Push wake can resume the session only when the caller armed it through `comment-identity` or a daemon-backed workflow; you still check the comm deliberately before phase boundaries and after long stretches.
 
-**Identity.** `steer` writes as the active task identity. If the task was opened by `comment-feature`, `comment-bug`, `worklog`, or `drive-plan`, keep using that comm/share token or the same session-scoped ethereal handle for replies and escalations. If `steer` is used standalone and must write before any task identity exists, run `comment-identity` first. Do not switch to an ambient registered profile or Botlets bot profile mid-task.
+**Identity.** `steer` writes as the active task identity. If the task was opened by `comment-feature`, `comment-bug`, `worklog`, or `drive-plan`, keep using that comm/share token or the same session-scoped ephemeral handle for replies and escalations. If `steer` is used standalone and must write before any task identity exists, run `comment-identity` first. Do not switch to an ambient registered profile or Botlets bot profile mid-task.
 
 ## Two motions
 

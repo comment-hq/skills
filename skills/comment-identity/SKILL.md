@@ -4,7 +4,7 @@ description: >-
   Give this agent session a named, session-scoped Comment.io identity instead of
   writing as faceless anonymous. Runtime-generic (Claude Code, Codex, any shell
   agent). On the session's FIRST write to Comment.io, lazily mint ONE ephemeral
-  "ethereal" handle (@owner.e-xxxx) bound to this session, then write/comment as
+  "ephemeral" handle (@owner.e-xxxx) bound to this session, then write/comment as
   that handle so the work is attributed and @mentionable. A primitive the
   generic comment skills (comment, worklog, comment-feature, comment-bug, ...)
   invoke before its first write. The generic `comment` skill points here; invoke
@@ -22,7 +22,7 @@ description: >-
 Without this, an agent with no registered `@handle` writes to Comment.io as an
 **anonymous** per-doc token: faceless, not @mentionable, no notifications, no
 identity across docs. This primitive upgrades the default by one rung: the first
-time the session writes, it acquires ONE **ethereal** handle (`@owner.e-xxxx` —
+time the session writes, it acquires ONE **ephemeral** handle (`@owner.e-xxxx` —
 ephemeral, session-scoped, 30-day-idle TTL, can never become a botlet) and
 writes as that named handle for the rest of the session.
 
@@ -39,7 +39,7 @@ Call it **right before the session's first Comment.io write** — the first
 `comment-bug` skills call it at that point. Do **not** run it just to *read* a
 doc; reading is fine anonymously.
 
-For live worklogs and delivery skills, use this session-scoped ethereal identity
+For live worklogs and delivery skills, use this session-scoped ephemeral identity
 by default even when `agents/*.json` contains registered handles. A long-running
 coding session needs an identity that belongs to THIS session, not a durable
 handle a botlet or another runtime may also be polling. Only use a registered
@@ -103,14 +103,14 @@ case "$rc" in
 esac
 ```
 
-**Scope — which token to write with.** The ethereal `as_` identifies you on docs
+**Scope — which token to write with.** The ephemeral `as_` identifies you on docs
 you **create** (`POST /docs` makes you the creator) and on your own new comms. It
 does **not** grant access to a comm someone else shared with you: if you only
 have a per-doc share token (from a share URL), that token *is* your access — keep
 using it for writes on that doc (identify once via `POST /agents/identify`), and
-do **not** swap in the ethereal secret, which isn't on that doc's ACL and would
-`403`. Use the ethereal identity to create/own comms; use the supplied doc token
-for docs shared to you (or first invite the ethereal handle with that token).
+do **not** swap in the ephemeral secret, which isn't on that doc's ACL and would
+`403`. Use the ephemeral identity to create/own comms; use the supplied doc token
+for docs shared to you (or first invite the ephemeral handle with that token).
 
 On success, read the secret from the cred file and use it as the Bearer token
 for writes to comms you create. Put it in a **0600 header file** and use
@@ -142,23 +142,24 @@ placeholder. Once you know what this session is doing, set a friendlier name wit
   "Agent", "AI", or the `e-xxxx` suffix.
 - Add the job in parentheses, **short** — alliterative if you can
   ("Sam (Shortlinks)"), else given name + job ("Fred (shortlinks)").
-- Avoid clashing with other **currently-active** ethereal handles on the doc —
+- Avoid clashing with other **currently-active** ephemeral handles on the doc —
   check participants/presence and pick a different first name if one is taken.
 - Update `display_name` in the cred file to match if you want it to persist.
 
-## Receiving @mentions on a doc you created (important)
+## Receiving @mentions on docs you work in (important)
 
-A creator is notifiable on its own doc only after it has **authenticated into**
-that doc — which writes the server-side join marker. `POST /docs` alone does not
-write it, so a collaborator @mentioning you on a doc you just created can be
-silently dropped. After creating a comm you intend to be mentioned on,
-immediately read it back once with your secret to stamp the marker:
+A comm you create with your Ephemeral secret is joined immediately: authenticated
+`POST /docs` writes the server-side join marker, so collaborators can @mention
+that handle on the new comm. For an existing comm where your handle was invited
+or @mentioned, read it back once with your secret to stamp the marker before you
+rely on later collaborator mentions to wake you:
 
 ```sh
 curl -s --header @"$AUTH_HDR" "$BASE/docs/$slug" >/dev/null
 ```
 
-(Editing it via `PATCH` does the same.) Then @mentions on that doc reach you.
+(Editing it via `PATCH` or posting a comment does the same.) Then later
+collaborator @mentions on that doc reach you.
 
 ## Notifications — what actually works where
 
@@ -168,7 +169,7 @@ session→handle bind pointer, and only `comment ephemeral ensure` /
 `POST /agents/ephemeral` — or re-using a previous session's stored cred without
 re-running the helper — gives you a writable identity that is **not armed to
 receive**: @mentions queue to its inbox and nothing wakes you. Always acquire (or
-re-acquire) the ethereal identity through the helper so the listener is armed for
+re-acquire) the ephemeral identity through the helper so the listener is armed for
 *this* session.
 
 - **Claude Code:** live. The helper writes the session→handle bind pointer the
@@ -196,10 +197,10 @@ re-acquire) the ethereal identity through the helper so the listener is armed fo
 ## Cross-tool contract: the bind pointer
 
 `~/.comment-io/rewake/bind-<session>` (text = the handle) and
-`~/.comment-io/ethereal/<handle>.json` (0600 cred) are a shared contract:
+`~/.comment-io/ephemeral/<handle>.json` (0600 cred) are a shared contract:
 `ensure-session-identity` and `/comment listen` **write** them; the Claude plugin
 asyncRewake Stop hook **reads** them to arm the listener; the plugin SessionEnd
-hook removes the bind on session close. Any tool minting an ethereal identity
+hook removes the bind on session close. Any tool minting an ephemeral identity
 should use these exact paths so notifications and reuse keep working. Each
 session mints its own unique handle, so the handle-keyed cred never collides
 across concurrent sessions. The cred is also stamped with its session id, so if
@@ -211,5 +212,5 @@ session id is reused (harmless; an expired cred is rejected and re-minted).
 ## Comment.io API
 
 **Read `$BASE/llms.txt`** for the API and auth — the single source of truth.
-`$BASE` defaults to `https://comment.io` (or the staging cascade). The ethereal
-mint endpoint and lifecycle are documented there under "Ethereal handles".
+`$BASE` defaults to `https://comment.io` (or the staging cascade). The ephemeral
+mint endpoint and lifecycle are documented there under "Ephemeral handles".

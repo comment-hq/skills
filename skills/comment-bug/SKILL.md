@@ -18,7 +18,7 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
 
 **Project Root.** Direct `comment-bug` uses its worklog as the Project Root. If the human or caller supplies an existing Project Root URL, preserve it and make the bug worklog a child with `Project Root: URL` near the top. Do not create a second root.
 
-**Identity.** Bug-fix comm activity follows the `worklog` identity rule: before the first Comment.io write, run `comment-identity` and use that session-scoped ethereal handle for the worklog, evidence comments, steering, and `ship` status updates. If a supplied Project Root/share URL gives only a per-doc token, use that token for the existing root, but do not create new bug worklogs as an ambient registered handle or any Botlets bot profile.
+**Identity.** Bug-fix comm activity follows the `worklog` identity rule: before the first Comment.io write, run `comment-identity` and use that session-scoped ephemeral handle for the worklog, evidence comments, steering, and `ship` status updates. If a supplied Project Root/share URL gives only a per-doc token, use that token for the existing root, but do not create new bug worklogs as an ambient registered handle or any Botlets bot profile.
 
 **Before using a composed skill, read its full `SKILL.md`** — naming it here does not auto-load its contract (the `ship` review/PR gate, `worklog` update rules), which you must follow.
 

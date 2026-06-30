@@ -45,7 +45,7 @@ Run the gate, then **act on it** — never treat a missing reviewer as a pass. L
 
 The **worklog is optional**. When a caller (`comment-feature` / `comment-bug`) passes a worklog `share_url`, post status to it. When a Project Root URL is also passed, preserve it: detailed PR lifecycle notes go to the worklog, while the root gets only concise state changes, blockers, and the PR link. For a standalone `$ship` on an existing PR with no worklog, skip the comm updates and just report status in the PR and terminal — never block the lifecycle on a missing worklog.
 
-**Identity for worklog updates.** If a caller passed a worklog/root, use that comm's supplied token or the session-scoped ethereal identity established by the caller for every status comment/edit. Do not choose a registered profile just because one exists locally, and never switch to a Botlets bot profile for a coding-session worklog. If `$ship` is used standalone and must write to a Comment.io doc before any task identity exists, run `comment-identity` first.
+**Identity for worklog updates.** If a caller passed a worklog/root, use that comm's supplied token or the session-scoped ephemeral identity established by the caller for every status comment/edit. Do not choose a registered profile just because one exists locally, and never switch to a Botlets bot profile for a coding-session worklog. If `$ship` is used standalone and must write to a Comment.io doc before any task identity exists, run `comment-identity` first.
 
 ## Merge is opt-in — default is "merge-ready", not "merged"
 

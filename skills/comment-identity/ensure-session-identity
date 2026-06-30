@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # ensure-session-identity — idempotently give THIS agent session a named,
-# session-scoped Comment.io "ethereal" identity, lazily minting one the first
+# session-scoped Comment.io "ephemeral" identity, lazily minting one the first
 # time it is needed and reusing it on every later call within the same session.
 #
 # Runtime-generic: pure POSIX sh + curl + python3. Any agent (Claude Code,
@@ -115,14 +115,76 @@ unset COMMENT_IO_ARK_KEY 2>/dev/null || true
 # `comment ephemeral --help` (NOT `ensure --help`: ensure parses --help via Go's
 # flag package and exits non-zero); grep confirms the subcommand. The CLI
 # re-validates the base against the same approved-origins allowlist. Skipped under
-# the COMMENT_IO_CURL test seam.
+# the COMMENT_IO_CURL test seam. Capture (not exec) so an older pre-rename CLI
+# that writes ethereal/<handle>.json can be migrated before this helper returns.
 if [ -z "$ARK" ] && [ -z "${COMMENT_IO_CURL:-}" ] && command -v comment >/dev/null 2>&1 && comment ephemeral --help 2>/dev/null | grep -q 'ephemeral ensure'; then
   set -- ephemeral ensure
   [ -n "$SESS" ] && set -- "$@" --session "$SESS"
   [ -n "$NAME" ] && set -- "$@" --name "$NAME"
   [ -n "$BASE_OVERRIDE" ] && set -- "$@" --base-url "$BASE_OVERRIDE"
   [ -n "$PRINT_SECRET" ] && set -- "$@" --print-secret
-  exec comment "$@"
+  DELEGATED_OUT="$(comment "$@")"; DELEGATED_RC=$?
+  if [ "$DELEGATED_RC" -eq 0 ]; then
+    DELEGATED_OUT="$(printf '%s\n' "$DELEGATED_OUT" | python3 -c '
+import json, os, sys, tempfile
+text = sys.stdin.read()
+lines = text.splitlines()
+out = list(lines)
+
+def write_private_json(path, rec):
+    parent = os.path.dirname(path)
+    try:
+        os.makedirs(parent, mode=0o700, exist_ok=True)
+        if os.path.islink(parent):
+            return False
+        os.chmod(parent, 0o700)
+        if os.path.islink(parent):
+            return False
+        st = os.stat(parent)
+        if (st.st_mode & 0o022) or st.st_uid != os.getuid():
+            return False
+    except Exception:
+        return False
+    fd, tmp = tempfile.mkstemp(dir=parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(rec, f)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+        return False
+
+for i, line in enumerate(lines):
+    if not line.startswith("OK "):
+        continue
+    parts = line.split(" ", 2)
+    if len(parts) != 3:
+        break
+    handle, cred = parts[1], parts[2]
+    try:
+        with open(cred) as f:
+            rec = json.load(f)
+    except Exception:
+        break
+    rec["identity_class"] = "ephemeral"
+    target = cred
+    parent = os.path.basename(os.path.dirname(cred))
+    if parent == "ethereal":
+        root = os.path.dirname(os.path.dirname(cred))
+        target = os.path.join(root, "ephemeral", os.path.basename(cred))
+    if write_private_json(target, rec):
+        out[i] = "OK " + handle + " " + target
+    break
+sys.stdout.write("\n".join(out))
+if text.endswith("\n") and out:
+    sys.stdout.write("\n")
+')"
+  fi
+  printf '%s\n' "$DELEGATED_OUT"
+  exit "$DELEGATED_RC"
 fi
 
 # Credential/state home — resolved EXACTLY like the Claude wake hook
@@ -203,11 +265,12 @@ case "$SESS" in
 esac
 
 REWAKE_DIR="$CIO_HOME/rewake"
-ETHEREAL_DIR="$CIO_HOME/ethereal"
+EPHEMERAL_DIR="$CIO_HOME/ephemeral"
+LEGACY_EPHEMERAL_DIR="$CIO_HOME/ethereal"
 BIND_FILE="$REWAKE_DIR/bind-$SESS_SAFE"
 LOCK_FILE="$REWAKE_DIR/.ensure-$SESS_SAFE.lock"
 # Create the store leniently so reuse-reads + the lock can operate.
-mkdir -p "$REWAKE_DIR" "$ETHEREAL_DIR" 2>/dev/null || true
+mkdir -p "$REWAKE_DIR" "$EPHEMERAL_DIR" 2>/dev/null || true
 # harden_perms is a SECURITY check that must pass BEFORE we trust any existing
 # credential: a group/world-writable store lets a local user swap the bind/cred
 # for an attacker token. chmod first (fixes dirs we own), then verify. It does
@@ -218,7 +281,7 @@ harden_perms() {
   #      1 = could not secure (still group/world-writable; cannot mint).
   # Threat is group/world WRITE (planting/replacing bind+cred), so key on 0o022;
   # chmod to 0700 anyway as defense in depth (the cred JSON itself is 0600).
-  D1="$REWAKE_DIR" D2="$ETHEREAL_DIR" python3 -c '
+  D1="$REWAKE_DIR" D2="$EPHEMERAL_DIR" python3 -c '
 import os, sys
 dirs = [os.environ["D1"], os.environ["D2"]]
 was_writable = []
@@ -264,16 +327,54 @@ for d, w in was_writable:
 sys.exit(0)
 ' 2>/dev/null
 }
+harden_legacy_perms() {
+  LEGACY_DIR="$LEGACY_EPHEMERAL_DIR" python3 -c '
+import os, sys
+d = os.environ["LEGACY_DIR"]
+if not (os.path.exists(d) or os.path.islink(d)):
+    sys.exit(0)
+if os.path.islink(d):
+    sys.exit(1)
+try:
+    w = bool(os.stat(d).st_mode & 0o022)
+except OSError:
+    sys.exit(1)
+try:
+    os.chmod(d, 0o700)
+except OSError:
+    pass
+try:
+    if os.path.islink(d):
+        sys.exit(1)
+    st = os.stat(d)
+    if st.st_mode & 0o022 or st.st_uid != os.getuid():
+        sys.exit(1)
+except OSError:
+    sys.exit(1)
+if w:
+    try:
+        for n in os.listdir(d):
+            if n.startswith("bind-") or n.endswith(".json"):
+                try:
+                    os.remove(os.path.join(d, n))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+sys.exit(0)
+' 2>/dev/null
+}
 check_writable() {
   # A one-time agent_secret we cannot persist is a lost secret + a consumed slot.
-  if [ ! -d "$REWAKE_DIR" ] || [ ! -w "$REWAKE_DIR" ] || [ ! -d "$ETHEREAL_DIR" ] || [ ! -w "$ETHEREAL_DIR" ]; then
-    echo "ensure-session-identity: credential store not writable ($ETHEREAL_DIR / $REWAKE_DIR); fix COMMENT_IO_HOME permissions before minting." >&2
+  if [ ! -d "$REWAKE_DIR" ] || [ ! -w "$REWAKE_DIR" ] || [ ! -d "$EPHEMERAL_DIR" ] || [ ! -w "$EPHEMERAL_DIR" ]; then
+    echo "ensure-session-identity: credential store not writable ($EPHEMERAL_DIR / $REWAKE_DIR); fix COMMENT_IO_HOME permissions before minting." >&2
     return 1
   fi
   return 0
 }
 # Verify store permissions up front — BEFORE trusting any existing credential.
 harden_perms; STORE_SECURE=$?
+harden_legacy_perms; LEGACY_STORE_SECURE=$?
 
 # Arm the Claude asyncRewake hook, which reads ONLY rewake/bind-$CLAUDE_CODE_SESSION_ID.
 # Our reuse/lock key may be a higher-precedence id (daemon/Codex) even inside a
@@ -301,22 +402,23 @@ arm_claude_hook_bind() {  # $1 = handle
 # session left no cleanup), scan for a cred stamped with THIS session and rebuild
 # the bind pointer — so a bind-write failure can never orphan a minted handle.
 try_reuse() {
-  _h="$(BIND_FILE="$BIND_FILE" ETHEREAL_DIR="$ETHEREAL_DIR" SESS="$SESS" BASE="$BASE" python3 - <<'PY'
+  _h="$(BIND_FILE="$BIND_FILE" EPHEMERAL_DIR="$EPHEMERAL_DIR" LEGACY_EPHEMERAL_DIR="$LEGACY_EPHEMERAL_DIR" LEGACY_STORE_SECURE="$LEGACY_STORE_SECURE" SESS="$SESS" BASE="$BASE" python3 - <<'PY'
 import json, os, sys, datetime, glob, tempfile, re
-bind = os.environ["BIND_FILE"]; ed = os.environ["ETHEREAL_DIR"]; sess = os.environ["SESS"]
+bind = os.environ["BIND_FILE"]; ed = os.environ["EPHEMERAL_DIR"]; legacy_ed = os.environ["LEGACY_EPHEMERAL_DIR"]; sess = os.environ["SESS"]
 base = os.environ.get("BASE", "")
+legacy_ok = os.environ.get("LEGACY_STORE_SECURE") == "0"
 HANDLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*[.]e-[0-9a-f]{8}$")
 SECRET_RE = re.compile(r"^as_[A-Za-z0-9._-]+$")
 
 def same_base(rec):
     # Never reuse a cred minted for a different deployment: sending that as_ to
-    # the current host would leak it cross-env or fail. Ethereal creds always
+    # the current host would leak it cross-env or fail. Ephemeral creds always
     # store base_url (this helper and /listen both write it). Normalize trailing
     # slashes on BOTH sides (/listen does not strip them) so a slash-only
     # difference still matches; a missing/blank base_url stays non-reusable.
     b = (rec.get("base_url") or "").rstrip("/")
     return b != "" and b == base.rstrip("/")
-TTL_S = 30 * 24 * 3600        # server ethereal TTL window (idle), approx
+TTL_S = 30 * 24 * 3600        # server ephemeral TTL window (idle), approx
 REFRESH_S = 7 * 24 * 3600     # push the local hint out when under this much remains
 NOW = datetime.datetime.now(datetime.timezone.utc)
 
@@ -349,13 +451,26 @@ def reusable(rec, expected_handle):
     secret = rec.get("agent_secret") or ""
     if expected_handle and handle != expected_handle:
         return False
-    if rec.get("identity_class") != "ethereal":
+    if rec.get("identity_class") not in ("ephemeral", "ethereal"):
         return False
     if not valid_handle(handle) or not SECRET_RE.fullmatch(secret):
         return False
     if rec.get("session") != sess:
         return False
     return live(rec) and same_base(rec)
+
+def write_private_json(path, rec):
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(rec, f)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+        return False
 
 def refresh(cred, rec):
     # The server extends the TTL from last_seen_at on every authenticated use.
@@ -366,16 +481,29 @@ def refresh(cred, rec):
     if r is None or r > REFRESH_S:
         return
     rec2 = dict(rec)
+    if rec2.get("identity_class") == "ethereal":
+        rec2["identity_class"] = "ephemeral"
     rec2["expires_at"] = (NOW + datetime.timedelta(seconds=TTL_S)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     try:
-        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(cred))
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump(rec2, f)
-        os.replace(tmp, cred)
+        write_private_json(cred, rec2)
     except Exception:
-        try: os.unlink(tmp)
-        except Exception: pass
+        pass
+
+def migrate_legacy(path, rec):
+    rec2 = dict(rec)
+    rec2["identity_class"] = "ephemeral"
+    target = os.path.join(ed, rec2["handle"] + ".json")
+    if not write_private_json(target, rec2):
+        return ""
+    return target
+
+def normalize_current(path, rec):
+    if rec.get("identity_class") != "ethereal":
+        return rec
+    rec2 = dict(rec)
+    rec2["identity_class"] = "ephemeral"
+    write_private_json(path, rec2)
+    return rec2
 
 # fast path: bind -> handle -> cred
 handle = ""
@@ -393,8 +521,20 @@ if handle:
         try:
             rec = json.load(open(cred))
             if reusable(rec, handle):
+                rec = normalize_current(cred, rec)
                 refresh(cred, rec)
                 print(handle); sys.exit(0)
+        except Exception:
+            pass
+    legacy_cred = os.path.join(legacy_ed, handle + ".json") if legacy_ok and valid_handle(handle) else ""
+    if legacy_cred and os.path.exists(legacy_cred):
+        try:
+            rec = json.load(open(legacy_cred))
+            if reusable(rec, handle):
+                migrated = migrate_legacy(legacy_cred, rec)
+                if migrated:
+                    refresh(migrated, dict(rec, identity_class="ephemeral"))
+                    print(handle); sys.exit(0)
         except Exception:
             pass
 
@@ -408,6 +548,7 @@ if sess:
         expected = os.path.basename(p)[:-5] if os.path.basename(p).endswith(".json") else ""
         if reusable(rec, expected):
             h = rec["handle"]
+            rec = normalize_current(p, rec)
             try:
                 bfd, btmp = tempfile.mkstemp(dir=os.path.dirname(bind))
                 with os.fdopen(bfd, "w") as f:
@@ -419,11 +560,33 @@ if sess:
                 continue  # could not rebuild bind; do not claim reuse
             refresh(p, rec)
             print(h); sys.exit(0)
+    for p in sorted(glob.glob(os.path.join(legacy_ed, "*.json"))) if legacy_ok else []:
+        try:
+            rec = json.load(open(p))
+        except Exception:
+            continue
+        expected = os.path.basename(p)[:-5] if os.path.basename(p).endswith(".json") else ""
+        if reusable(rec, expected):
+            h = rec["handle"]
+            migrated = migrate_legacy(p, rec)
+            if not migrated:
+                continue
+            try:
+                bfd, btmp = tempfile.mkstemp(dir=os.path.dirname(bind))
+                with os.fdopen(bfd, "w") as f:
+                    f.write(h)
+                os.replace(btmp, bind)
+            except Exception:
+                try: os.unlink(btmp)
+                except Exception: pass
+                continue
+            refresh(migrated, dict(rec, identity_class="ephemeral"))
+            print(h); sys.exit(0)
 sys.exit(1)
 PY
 )" || return 1
   [ -n "$_h" ] || return 1
-  _cred="$ETHEREAL_DIR/$_h.json"
+  _cred="$EPHEMERAL_DIR/$_h.json"
   arm_claude_hook_bind "$_h"
   printf 'OK %s %s\n' "$_h" "$_cred"
   if [ -n "$PRINT_SECRET" ]; then
@@ -446,7 +609,7 @@ fi
 # Minting needs a secured store (0) AND writable. Only an unsecurable store (1,
 # group/world-writable and not ours to chmod) blocks.
 if [ "${STORE_SECURE:-1}" -eq 1 ]; then
-  echo "ensure-session-identity: $REWAKE_DIR / $ETHEREAL_DIR are group/world-accessible; refusing to store secrets there (chmod 700 them)." >&2
+  echo "ensure-session-identity: $REWAKE_DIR / $EPHEMERAL_DIR are group/world-accessible; refusing to store secrets there (chmod 700 them)." >&2
   exit 1
 fi
 check_writable || exit 1
@@ -554,7 +717,7 @@ RESP_FILE="$(mktemp "${TMPDIR:-/tmp}/csi-resp.XXXXXX")" || { echo "ensure-sessio
 rm -f "$HDR_FILE"
 
 # --- persist cred (0600) AND bind pointer, atomically in one python block ----
-HANDLE="$(RESP_FILE="$RESP_FILE" ETHEREAL_DIR="$ETHEREAL_DIR" BIND_FILE="$BIND_FILE" BASE="$BASE" SESS="$SESS" python3 - <<'PY'
+HANDLE="$(RESP_FILE="$RESP_FILE" EPHEMERAL_DIR="$EPHEMERAL_DIR" BIND_FILE="$BIND_FILE" BASE="$BASE" SESS="$SESS" python3 - <<'PY'
 import json, os, sys, tempfile, re
 with open(os.environ["RESP_FILE"]) as _f:
     resp = _f.read()
@@ -574,14 +737,14 @@ if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[.]e-[0-9a-f]{8}", handle) or ".
 rec = {
     "handle": handle,
     "agent_secret": secret,
-    "identity_class": "ethereal",
+    "identity_class": "ephemeral",
     "display_name": r.get("display_name", ""),
     "expires_at": r.get("expires_at", ""),
     "base_url": r.get("base_url") or os.environ["BASE"],
     "owner": r.get("owner", ""),
     "session": os.environ.get("SESS", ""),  # lets try_reuse reclaim if bind is lost
 }
-ed = os.environ["ETHEREAL_DIR"]
+ed = os.environ["EPHEMERAL_DIR"]
 cred = os.path.join(ed, handle + ".json")
 # atomic write of the cred file at 0600
 fd, tmp = tempfile.mkstemp(dir=ed)
@@ -618,7 +781,7 @@ if [ -z "$HANDLE" ]; then
   exit 1
 fi
 
-CRED="$ETHEREAL_DIR/$HANDLE.json"
+CRED="$EPHEMERAL_DIR/$HANDLE.json"
 arm_claude_hook_bind "$HANDLE"
 printf 'OK %s %s\n' "$HANDLE" "$CRED"
 if [ -n "$PRINT_SECRET" ]; then

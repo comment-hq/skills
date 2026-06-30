@@ -37,7 +37,7 @@ change earns the investment.
   (see **Repo config**); never `main`.
 - ✅ a **lightweight worklog** note so the change is watchable and the context
   survives into promotion (one short comm: what you're trying + a running list of
-  what changed). Use the session-scoped ethereal handle via `comment-identity`.
+  what changed). Use the session-scoped ephemeral handle via `comment-identity`.
   For a genuinely throwaway visual check the user can say "no comm" and you skip it.
 - ✅ the **`fast`** test lane (typecheck/build + the one or two tests nearest the
   change), or nothing for a pure visual tweak — see **Repo config**.

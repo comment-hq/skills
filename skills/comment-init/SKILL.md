@@ -49,7 +49,7 @@ run alone.
 ## Identity
 
 Before creating, patching, or commenting on Comment.io comms, run
-`comment-identity` and prefer the session-scoped ethereal handle for
+`comment-identity` and prefer the session-scoped ephemeral handle for
 coding-session work. The **Repo config** layer writes only local files (no
 Comment.io identity needed). Exception for comms: if Team Wiki placement or
 reconciling an existing Overview requires a human-selected registered profile
