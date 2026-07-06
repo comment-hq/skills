@@ -16,7 +16,7 @@ Full feature delivery whose **working memory, decision history, and human-steeri
 
 > For an **un-shaped idea** — where the goal, scope, or product fit isn't settled yet — start with **`/comment-spec`** first. It shapes the idea into a crisp PM spec (clear goal, fits the app, fewest new concepts, a measurement plan) and then invokes this skill with that spec. Use `comment-feature` directly when the feature is already well-defined.
 
-> For a quick **"let me see it first"** change, start with **`/comment-prototype`** — implement fast and show it, skipping the full test-suite + review-loop + PR gate; later promote it *into* this skill, reusing the same worklog/branch.
+> For a quick **"let me see it first"** change, start with **`/comment-prototype`** — implement fast and show it, skipping the review-loop + PR gate; later promote it *into* this skill, reusing the same worklog/branch.
 
 **Project Root.** Direct `comment-feature` uses its worklog as the Project Root. If invoked from `comment-spec` with a Spec comm / Project Root URL, the Spec doc remains the Project Root; create the feature worklog, Plan, design, and ADR docs as children with `Project Root: URL` near the top, and link them from the Spec root. Do not create a second root.
 
@@ -51,7 +51,7 @@ Plan, status, decisions, summary, open questions → worklog **body**. Every rev
 
 ## Repo config
 
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for the **`fast`** lane (quick iteration) and **`full`** lane (the pre-push gate), plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
+This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for the affected-tests lane used for iteration, pre-push, PR creation, and merge-ready gates, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer an affected/local lane from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
 
 ## Comment.io API
 

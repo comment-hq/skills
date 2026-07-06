@@ -2,10 +2,10 @@
 name: comment-prototype
 description: >-
   Make a small or exploratory change FAST and show it, so you can look before
-  committing to the full gate. Implements quickly, runs only the repo's `fast`
-  test lane (or nothing for a pure visual tweak), and surfaces the result in the
-  real app — deliberately skipping the full test suite, the `review-loop` gate,
-  and the PR. When you like it, it promotes the work into `comment-feature` /
+  committing to the merge-ready gate. Implements quickly, runs only the repo's
+  affected-test lane (or nothing for a pure visual tweak), and surfaces the
+  result in the real app — deliberately skipping the `review-loop` gate and the
+  PR. When you like it, it promotes the work into `comment-feature` /
   `comment-bug` to harden and ship. Invoke as `$comment-prototype` /
   `/comment-prototype`, or when asked to "just try", "quickly tweak", "spike",
   "prototype", or "let me see X first". Works identically under Codex and Claude
@@ -19,13 +19,12 @@ tweaks, an exploratory spike, a "does this even feel right" change. `comment-pro
 optimizes for *time-to-look*, not for merge-readiness — it skips the heavy gate
 on purpose and hands you something to react to fast.
 
-It is the fast lane of the `comment-dev` family. The slow, merge-ready lanes are
-`comment-feature` and `comment-bug`; this skill **promotes into them** once the
-change earns the investment.
+It is the lightweight prototype path of the `comment-dev` family. The
+merge-ready paths are `comment-feature` and `comment-bug`; this skill **promotes
+into them** once the change earns the investment.
 
 ## What it deliberately skips (until you promote)
 
-- ❌ the **`full`** test lane / whole suite
 - ❌ the **`review-loop`** review gate
 - ❌ opening a **PR** / driving to merge-ready (`ship`)
 - ❌ the full worklog ceremony (plan, decision log, review rounds)
@@ -39,7 +38,7 @@ change earns the investment.
   survives into promotion (one short comm: what you're trying + a running list of
   what changed). Use the session-scoped ephemeral handle via `comment-identity`.
   For a genuinely throwaway visual check the user can say "no comm" and you skip it.
-- ✅ the **`fast`** test lane (typecheck/build + the one or two tests nearest the
+- ✅ the affected-test lane (typecheck/build + the tests nearest the
   change), or nothing for a pure visual tweak — see **Repo config**.
 - ✅ **showing the result in the real app**, which is the whole point.
 
@@ -52,7 +51,7 @@ change earns the investment.
    repo's branch convention) and, unless the user opted out, a **light worklog**
    note via `worklog` + `comment-identity`.
 3. **Implement fast.** Smallest change that makes the idea visible. Don't gold-plate.
-4. **`fast` lane check** (Repo config) — typecheck + build + the nearest test, or
+4. **Affected lane check** (Repo config) — typecheck/build when useful + the nearest test, or
    skip entirely for a pure visual nudge. This catches "it doesn't even compile",
    not "it's production-ready".
 5. **Show it.** Surface the change in the real app the repo's way (see **Repo
@@ -66,19 +65,19 @@ change earns the investment.
 
 ## Promote — make it real
 
-When the human likes it, harden the *same branch and worklog* through the full
-lane. **Hand the promoted skill the prototype's worklog `share_url` and branch**;
+When the human likes it, harden the *same branch and worklog* through the normal
+merge-ready flow. **Hand the promoted skill the prototype's worklog `share_url` and branch**;
 it **reuses that worklog as the Project Root — upgrading the light note in place
 to the full shape — instead of opening a second**, and keeps building on the
 branch:
 
 - **Feature** → run **`comment-feature`**. It treats the handed-in prototype
   worklog as the root, plans (lightly, since code already exists), runs
-  **`review-loop`** on the diff, runs the **`full`** test lane, writes the
+  **`review-loop`** on the diff, runs the affected-test lane, writes the
   non-technical design, and **`ship`**s to merge-ready.
 - **Bug fix** → run **`comment-bug`**: it reuses the worklog as the root, then
   adds the **regression test that fails without the fix** (a prototype skips
-  this; a real fix must not), `review-loop`, `full` lane, ship.
+  this; a real fix must not), `review-loop`, affected tests, ship.
 
 Promotion does not restart from scratch — the code, branch, worklog, and context
 carry over; it adds the rigor a prototype skipped. Rename the branch to the
@@ -88,9 +87,9 @@ that prefix (see **Repo config**).
 ## Repo config
 
 Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for
-the **`fast`** lane commands, and the guide's **deploy/preview** section for how
-to run/show the app (or the repo's run skill). Use the `fast` lane here;
-promotion switches to `full`. If `docs/TESTING.md` is absent, infer a minimal
+the affected-test lane commands, and the guide's **deploy/preview** section for how
+to run/show the app (or the repo's run skill). Use the affected lane here and
+during promotion. If `docs/TESTING.md` is absent, infer a minimal
 typecheck/build from `package.json` / `Makefile`, and offer `comment-init` to
 scaffold the config.
 

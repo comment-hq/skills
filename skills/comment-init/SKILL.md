@@ -3,8 +3,9 @@ name: comment-init
 description: >-
   Initialize or refresh a repo for the `comment-*` skill family. Two layers:
   (1) the **repo config the skills read** — the `AGENTS.md`/`CLAUDE.md` "Agent
-  Skill Config" pointer plus `docs/TESTING.md` (a `fast` lane for iteration and a
-  `full` lane for the pre-push gate), inferred from the repo's build/test setup;
+  Skill Config" pointer plus `docs/TESTING.md` (the affected-test lane for
+  iteration, pre-push, PR creation, and merge-ready gates), inferred from the
+  repo's build/test setup;
   and (2) the **architecture docs as comms** — one living "Architecture Overview"
   comm plus immutable per-decision ADRs in a Team Wiki folder. Idempotent —
   re-running reconciles existing files/comms instead of duplicating them. Trigger
@@ -23,7 +24,7 @@ description: >-
 1. **Repo config (on disk, in the repo)** — the files those skills read to learn
    *this* repo, so they stay generic and don't hardcode commands:
    - the **Agent Skill Config** pointer in **`AGENTS.md` (else `CLAUDE.md`)**, and
-   - **`docs/TESTING.md`** — the `fast` and `full` test lanes.
+   - **`docs/TESTING.md`** — the affected-test lane.
 2. **Architecture docs (as Comment.io comms)**:
    - **Architecture Overview** — ONE living comm: *what is true now* (system
      overview, component boundaries, data flows, a Mermaid diagram, invariants).
@@ -69,17 +70,20 @@ human-authored nuance without confirming.
 2. **Detect the build/test setup.** Fan out read-only explorers over the repo's
    ecosystem signals — `package.json` scripts, `Makefile`/`Justfile`,
    `pyproject.toml`/`tox.ini`, `Cargo.toml`, `go.mod`, `.github/workflows/*`,
-   monorepo layout. Identify: the command that runs the **full** test suite + the
-   build, and the narrowest **focused** commands (single file, by-name filter,
-   one package/shard, typecheck-only).
-3. **Derive two lanes:**
-   - **`fast`** — typecheck/build + the nearest test(s); seconds, scoped to a change.
-   - **`full`** — the complete pre-push gate that must pass before a PR is merge-ready.
+   monorepo layout. Identify the affected/local command agents should run before
+   commits, pushes, PRs, and merge-ready handoffs, plus the narrowest focused
+   commands (single file, by-name filter, one package/shard, typecheck-only).
+   Record full-suite commands only as manual diagnostics / CI reference, not as
+   the routine pre-push gate.
+3. **Derive one local lane:**
+   - **`affected`** — typecheck/build when useful + affected/nearest tests;
+     seconds, scoped to a change, and used for iteration, pre-push, PR creation,
+     and merge-ready gates.
 4. **Write/refresh `docs/TESTING.md`** from the template below. If it exists,
    reconcile (update commands that drifted; keep human notes) and report what
    changed; never overwrite wholesale.
 5. **Write/refresh the Agent Skill Config pointer** in the guide: a short section
-   linking **test lanes → `docs/TESTING.md`**, **PR/branch/merge norms**,
+   linking **affected test lane → `docs/TESTING.md`**, **PR/branch/merge norms**,
    **deploy/preview**, and **architecture → `docs/ARCHITECTURE.md`** + the Overview
    comm. Keep the load-bearing commands inline in the guide too (agents that
    auto-load `AGENTS.md` — e.g. Codex — won't follow links on their own).
@@ -123,15 +127,16 @@ Repo config layer existing.
 
 ## Templates
 
-**`docs/TESTING.md`** — sections: intro naming the two lanes and when to skip both
-(genuinely docs-only) → `## fast lane` (the narrowest focused commands, with a
-"typecheck + build + nearest test" rule of thumb) → `## full lane` (the complete
-pre-push gate, run from the repo root, plus any local review gate) → `## CI / merge
-norms` (where `full` is enforced) → a **lane → skill mapping** table. Fill commands
-from the repo's actual `package.json`/`Makefile`/CI — never copy another repo's.
+**`docs/TESTING.md`** — sections: intro naming the affected lane and when to skip
+it (genuinely docs-only) → `## affected lane` (the narrowest focused commands,
+with a "typecheck/build when useful + affected tests" rule of thumb, used even
+before push / PR) → optional `## full suites` reference (manual diagnostics and
+CI only, never the routine pre-push gate) → `## CI / merge norms` → a
+**lane → skill mapping** table. Fill commands from the repo's actual
+`package.json`/`Makefile`/CI — never copy another repo's.
 
 **Agent Skill Config pointer** (in `AGENTS.md`/`CLAUDE.md`) — a short section:
-test lanes → `docs/TESTING.md`; PR/branch/merge norms → the guide's sections;
+affected test lane → `docs/TESTING.md`; PR/branch/merge norms → the guide's sections;
 deploy/preview → the guide's deploy section; architecture → `docs/ARCHITECTURE.md`
 + the Overview comm. Keep the core test/build/deploy commands inline in the guide.
 

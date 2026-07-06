@@ -43,12 +43,12 @@ For each phase:
 
 1. **Normalize** the phase into concrete tasks in the plan body.
 2. **Implement** incrementally, keeping edits scoped to the phase.
-3. **Validate locally** — run the repo's **`fast`** lane (see **Repo config**) for mid-phase iteration, and the **`full`** lane at a deliverable phase boundary, over ad-hoc checks (tests, builds, linters, smoke tests, or focused scripts).
+3. **Validate locally** — run the repo's affected-tests lane (see **Repo config**) for mid-phase iteration, at phase boundaries, and when the branch is about to be pushed / declared merge-ready. Use focused ad-hoc checks (tests, builds, linters, smoke tests, or scripts) only when they are the narrowest coverage for what changed. CI's `merge_group` matrix is the full-matrix backstop.
 4. **Validate on staging** when the project supports it and the change benefits from deployed verification. Never deploy to production unless the repo/user instructions explicitly allow it.
 5. **Prove it works** before moving on; capture the commands, URLs, logs, or manual checks as evidence (comm mode → a **comment**; file mode → the plan's "Log" section).
 6. **Update the plan** with the real outcome, plan changes, and remaining risks (the comm body, or the file).
 7. **`$review-loop`** the phase result (plan + diff + evidence). Record each round as evidence (comm mode → a **comment**; file mode → the "Log" section).
-8. If `$review-loop` returns real issues: fix in priority order, update the plan, revalidate, and re-run `$review-loop` until clean.
+8. If `$review-loop` returns real issues: fix in priority order, update the plan, revalidate with the affected-tests lane, and re-run `$review-loop` until clean.
 9. **`steer` checkpoint** — before an irreversible or ambiguous step, and at phase boundaries, get human input on decisions you shouldn't make alone (comm mode → poll the comm via `steer` and pass the Project Root URL when one exists; file mode → ask the user directly) and escalate.
 10. Mark the phase complete only after implementation, validation, plan update, and a clean `$review-loop` round.
 
@@ -58,7 +58,7 @@ At every phase boundary, ask whether there is another useful action available wi
 
 ## Repo config
 
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for the **`fast`** lane (quick iteration) and **`full`** lane (the pre-push gate), plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
+This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for the affected-tests lane used for iteration, pre-push, PR creation, and merge-ready gates, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer an affected/local lane from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
 
 ## Composes
 

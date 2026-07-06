@@ -58,9 +58,10 @@ findings", not "every reviewer fell silent by exhaustion".
 
 `review-loop` itself is repo-agnostic. When a fix needs validation, run the
 repo's checks rather than ad-hoc ones: read **`AGENTS.md` (else `CLAUDE.md`)**
-and the **fast** lane in the `docs/TESTING.md` it links; if that's absent, infer
-from `package.json` / `Makefile` / CI. The caller (`drive-plan` / `ship`) owns
-the heavier validation — `review-loop` owns the review.
+and the **affected** lane in the `docs/TESTING.md` it links; if that's absent,
+infer an affected local gate from `package.json` / `Makefile` / CI. The caller
+(`drive-plan` / `ship`) may choose when to run it, but local validation stays on
+the affected lane.
 
 ## Relationship to `code-review`
 
