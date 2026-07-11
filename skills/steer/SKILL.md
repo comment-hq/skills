@@ -22,7 +22,7 @@ description: >-
 
 ### 1. Listen — fold steering in
 
-At natural checkpoints (phase boundaries, before irreversible steps, after long stretches), poll the task comm for human comments and @mentions newer than the last revision you saw. Use the mention/notification and since-revision filters documented in `llms.txt` — don't hard-code the query syntax here, it evolves.
+At natural checkpoints (phase boundaries, before irreversible steps, after long stretches), poll the task comm for human comments and @mentions newer than the last revision you saw. Use the mention/notification and since-revision filters documented in `$BASE/llms/reference.txt` — don't hard-code the query syntax here, it evolves.
 
 - For each new human comment: incorporate it into the **Plan**/**Decision log** of the worklog, and **reply** in-thread acknowledging what you changed.
 - If a comment contradicts your current plan, the human wins — revise and record why.
@@ -31,7 +31,7 @@ At natural checkpoints (phase boundaries, before irreversible steps, after long 
 
 When you hit a decision you shouldn't make alone (product choice, irreversible action, ambiguous requirement):
 
-1. Post a **comment** that @mentions the human, includes the required `notify` object from `llms.txt`, uses `Decision needed: headline` or `Blocked: headline`, states the decision crisply, lists your recommendation, and says what happens next.
+1. Post a **comment** that @mentions the human, includes the required `notify` object from `$BASE/llms/reference.txt`, uses `Decision needed: headline` or `Blocked: headline`, states the decision crisply, lists your recommendation, and says what happens next.
 2. Name the blocker in the worklog **Open questions** — this body edit *is* allowed (it's current state, which belongs in the body).
 3. If a Project Root exists and the active comm is a child/Plan doc, add only a one-line blocker summary/link to the root; keep the detailed ask where this skill is polling.
 4. **Wait**: poll on a sensible cadence. Do other non-blocked work meanwhile. Resume when the human replies; if nothing else is doable, stop and hand back with the exact decision needed.
@@ -44,7 +44,7 @@ You are not continuously connected. "Listening" = you poll when you take a turn.
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** for the API and auth — the single source of truth. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity`, a supplied doc token, or an explicit daemon-backed workflow identity, not ambient profile selection. Don't restate its contracts here.
+**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms/reference.txt`** for the exact API and auth contract. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity`, a supplied doc token, or an explicit daemon-backed workflow identity, not ambient profile selection. Don't restate its contracts here.
 
 **Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.
 

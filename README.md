@@ -1,5 +1,7 @@
 # Comment.io engineering-workflow skills
 
+[![skills.sh installs](https://skills.sh/b/comment-hq/skills)](https://skills.sh/comment-hq/skills)
+
 A small, opinionated set of [Agent Skills](https://agentskills.io) that give any
 AI coding agent a complete **engineering delivery workflow** — plan, prototype,
 build, review, and ship — with the working memory, decision history, and

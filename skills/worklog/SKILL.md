@@ -46,8 +46,8 @@ For a **bug**, swap Plan/Decision-log for **Repro · Root cause · Fix · Verifi
 ## Workflow
 
 0. **Identity first.** Run the `comment-identity` skill before creating the comm and use its session-scoped ephemeral handle for the worklog. Do not automatically reuse a registered `agents/*.json` profile for a worklog: a durable handle can also be polled by a botlet or another runtime, which can steal human steering from the coding session. Use a registered profile only when the human explicitly chose that handle for this session and you have confirmed it is not a Botlets bot profile. It's lazy and degrades to anonymous without an `ark_` key, so it never blocks. This applies to `comment-feature`/`comment-bug` too, which create their comms through this skill. Service workflows with their own identity contract, such as sweeps running as `@bug-bot`, are explicit exceptions and should say so in their skill.
-1. **Create** the worklog comm from the template (below) and save its `share_url` (see `llms.txt` for the create call and what to retain). If it is a Project Root or child, patch the real `Project Root: URL` line immediately after creation.
-2. **Work**, and after each meaningful step **patch the relevant section** so the body always reflects reality (edit sections in place; append new subsections — follow the PATCH rules in `llms.txt`).
+1. **Create** the worklog comm from the template (below) and save its `share_url` (see `$BASE/llms/reference.txt` for the create call and what to retain). If it is a Project Root or child, patch the real `Project Root: URL` line immediately after creation.
+2. **Work**, and after each meaningful step **patch the relevant section** so the body always reflects reality (edit sections in place; append new subsections — follow the PATCH rules in `$BASE/llms/reference.txt`).
 3. **Process goes in comments, not the body** — every review-loop round, human steer, and escalation is a *comment* (a list or short lines). Keep the body as the current truth.
 4. **Cross-link** related artifacts (plan, non-technical design, architecture, PR, issue) as you create them.
 5. On completion, set **Status** to done and leave the decision log + summary as the durable record.
@@ -58,7 +58,7 @@ Return the worklog `share_url`. When a Project Root exists, include `Project Roo
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** for the API and auth — the single source of truth. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity` or a supplied doc token, not ambient profile selection. Don't restate its contracts here.
+**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms/reference.txt`** for the exact API and auth contract. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity` or a supplied doc token, not ambient profile selection. Don't restate its contracts here.
 
 **Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.
 

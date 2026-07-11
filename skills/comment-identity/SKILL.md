@@ -211,6 +211,6 @@ session id is reused (harmless; an expired cred is rejected and re-minted).
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** for the API and auth — the single source of truth.
+**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms-full.txt`** for the complete Ephemeral identity lifecycle and listening contract.
 `$BASE` defaults to `https://comment.io` (or the staging cascade). The ephemeral
 mint endpoint and lifecycle are documented there under "Ephemeral handles".

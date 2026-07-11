@@ -92,15 +92,15 @@ human-authored nuance without confirming.
 
 ## Workflow — Architecture Overview
 
-1. **Find the existing Overview** first by searching the **Team Wiki / Library context** (per `llms.txt`) — not just your own doc grants, since another agent may have created the Overview and it won't appear in your personal grant list. Match only one whose title/metadata names **this repo** (e.g. `Architecture: <repo>`) — a generic `Architecture Overview` with no repo identifier is **not** a match, since the same Team Wiki may hold overviews for several repos and you must never reconcile/overwrite another repo's doc. Exactly one repo-specific match → reconcile it; zero → create fresh (titled `Architecture: <repo>`) **with the Team Wiki `library_target`** (shared placement — never the default personal placement, or other agents won't find it on later runs and will create a duplicate); more than one → list them in a comment and disambiguate via `steer`. **Never create a second Overview for this repo.**
+1. **Find the existing Overview** first by searching the **Team Wiki / Library context** (per `$BASE/llms/reference.txt`) — not just your own doc grants, since another agent may have created the Overview and it won't appear in your personal grant list. Match only one whose title/metadata names **this repo** (e.g. `Architecture: <repo>`) — a generic `Architecture Overview` with no repo identifier is **not** a match, since the same Team Wiki may hold overviews for several repos and you must never reconcile/overwrite another repo's doc. Exactly one repo-specific match → reconcile it; zero → create fresh (titled `Architecture: <repo>`) **with the Team Wiki `library_target`** (shared placement — never the default personal placement, or other agents won't find it on later runs and will create a duplicate); more than one → list them in a comment and disambiguate via `steer`. **Never create a second Overview for this repo.**
 2. **Map the codebase**: fan out read-only explorers over the major subsystems (backend, frontend, shared packages, infra). Collect components, boundaries, data flows, invariants.
 3. **Write/update** the Overview body from the template: overview → Mermaid system map → components & boundaries table → key data flows → invariants → open questions. Each invariant links to its ADR.
 4. **Reconcile, don't duplicate**: patch the existing comm's sections to match reality; note drift you corrected.
 
 ## Workflow — ADRs
 
-1. **Get the ADR folder id.** There is no folder-list endpoint that returns folder ids, so the create call (`POST /docs/folders` with the team `library_target` — see `llms.txt`) is how you obtain the folder `node.id`. The **first** time, create the "Architecture Decision Records" Team-library folder and **record its id in the Overview's `Decision records` section**; on later runs, reuse that recorded id rather than creating a second folder.
-2. **Create the ADR inside that folder** by passing the folder id as the team-library parent on doc creation (see `llms.txt` for the exact field). Capture the ADR's `share_url`.
+1. **Get the ADR folder id.** There is no folder-list endpoint that returns folder ids, so the create call (`POST /docs/folders` with the team `library_target` — see `$BASE/llms/reference.txt`) is how you obtain the folder `node.id`. The **first** time, create the "Architecture Decision Records" Team-library folder and **record its id in the Overview's `Decision records` section**; on later runs, reuse that recorded id rather than creating a second folder.
+2. **Create the ADR inside that folder** by passing the folder id as the team-library parent on doc creation (see `$BASE/llms/reference.txt` for the exact field). Capture the ADR's `share_url`.
 3. **Number sequentially** (`ADR-0001`, `0002`, …). Status lifecycle: `Proposed` (decision made, change not yet merged) → `Accepted` (the change merged) → `Superseded`. The only edits permitted on an existing ADR are **narrow header-metadata flips**: `Proposed`→`Accepted` on merge, and `Accepted`→`Superseded` with a `Superseded by` link when a new ADR records `Supersedes: ADR-NNNN`. **Never touch an ADR's Context / Decision / Consequences once written** — those stay immutable.
 4. **Link** the new ADR from the relevant Overview invariant, and cross-link related ADRs.
 
@@ -121,7 +121,7 @@ Repo config layer existing.
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** for the API and auth — the single source of truth. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity`, a supplied doc token, or the explicit Team Wiki profile named in this skill's Identity section, not ambient profile selection. Don't restate its contracts here.
+**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms/reference.txt`** for the exact API and auth contract. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity`, a supplied doc token, or the explicit Team Wiki profile named in this skill's Identity section, not ambient profile selection. Don't restate its contracts here.
 
 **Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.
 
