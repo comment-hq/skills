@@ -1,51 +1,48 @@
 ---
 name: comment-identity
 description: >-
-  Give this agent session a named, session-scoped Comment.io identity instead of
-  writing as faceless anonymous. Runtime-generic (Claude Code, Codex, any shell
-  agent). On the session's FIRST write to Comment.io, lazily mint ONE ephemeral
-  "ephemeral" handle (@owner.e-xxxx) bound to this session, then write/comment as
-  that handle so the work is attributed and @mentionable. A primitive the
-  generic comment skills (comment, worklog, comment-feature, comment-bug, ...)
-  invoke before its first write. The generic `comment` skill points here; invoke
-  when an agent is about to create/edit a comm or post a comment, especially for
-  live worklogs and delivery tasks, even if registered profiles exist. Mints over
-  EITHER a paired computer (the daemon's own token — native, or a Docker-caged
-  daemon via `docker exec`; no key to copy) OR the owner's ark_ key; degrades to
-  anonymous when neither is available. (Pairing enables identity for the paired
-  host's origin; a different origin still needs an ark_ key.) Works the same under
-  Codex and Claude Code.
+  Give this session a named, session-scoped Comment.io identity only when it is
+  about to make a direct REST write without either a supplied per-doc token or a
+  human-selected registered identity. Never invoke for Comment.io tools/MCP,
+  browser actions, URL fetches, or reads: those routes carry their own identity
+  and access, or are read-only. Runtime-generic (Claude Code, Codex, any shell
+  agent). Mints one Ephemeral handle through a paired computer or owner ark_ key
+  and degrades to anonymous when neither authority is available.
 ---
 
-# comment-identity — a named identity for this session, by default
+# comment-identity — named identity for an uncredentialed direct REST write
 
-Without this, an agent with no registered `@handle` writes to Comment.io as an
-**anonymous** per-doc token: faceless, not @mentionable, no notifications, no
-identity across docs. This primitive upgrades the default by one rung: the first
-time the session writes, it acquires ONE **ephemeral** handle (`@owner.e-xxxx` —
-ephemeral, session-scoped, 30-day-idle TTL, can never become a botlet) and
-writes as that named handle for the rest of the session.
+On a direct REST path with no selected identity and no supplied per-doc token,
+an agent otherwise creates or writes as anonymous. This primitive upgrades that
+specific fallback by one rung: before the first such write, it acquires ONE
+**Ephemeral** handle (`@owner.e-xxxx` — session-scoped, 30-day-idle TTL, can
+never become a botlet) and reuses it for later direct REST writes in the session.
 
-It is **lazy** (nothing is minted until the first write — read-only sessions stay
-anonymous) and **idempotent per session** (every later call reuses the same
-handle). One canonical helper does the work: `ensure-session-identity` (next to
-this file).
+It is **lazy** (nothing is minted until the first qualifying direct REST write —
+read-only and tool/browser sessions stay unchanged) and **idempotent per
+session** (every later call reuses the same handle). One canonical helper does
+the work: `ensure-session-identity` (next to this file).
 
 ## When to run it
 
-Call it **right before the session's first Comment.io write** — the first
-`POST /docs` (create a comm), first `POST /docs/:slug/comments`, or first
-`PATCH /docs/:slug`. The generic `comment`/`worklog`/`comment-feature`/
-`comment-bug` skills call it at that point. Do **not** run it just to *read* a
-doc; reading is fine anonymously.
+Call it **right before the session's first direct REST write only when both are
+true**: no supplied per-doc token authorizes the comm, and the human did not
+select a registered identity for this session. The common case is an
+uncredentialed direct `POST /docs`; it may also apply to a direct comment or
+PATCH after that Ephemeral handle has been invited to the comm.
 
-For live worklogs and delivery skills, use this session-scoped ephemeral identity
-by default even when `agents/*.json` contains registered handles. A long-running
-coding session needs an identity that belongs to THIS session, not a durable
-handle a botlet or another runtime may also be polling. Only use a registered
-profile when the human explicitly asked this session to act as that profile and
-you have confirmed it is not a Botlets bot profile. Botlets bot profiles never
-count as a safe ambient coding-session identity.
+Never run it for a Comment.io tool or MCP call, browser action, URL fetch/open,
+or read. Tools/connectors and authenticated browsers carry their own identity;
+the URL-fetch-only route is read-only. With a supplied per-doc token, keep that
+token and identify it only when its personalized quickstart/API response asks
+for `display_name` or `POST /agents/identify`. With a human-selected registered
+identity, use that matching-host profile instead.
+
+For live worklogs and delivery skills, invoke this primitive only if their chosen
+route is direct REST and lacks both credentials above. A long-running coding
+session must not silently borrow an ambient registered handle a botlet or another
+runtime may also be polling. Botlets bot profiles never count as a safe ambient
+coding-session identity.
 
 Dedicated service workflows can opt out explicitly when their contract requires a
 durable daemon-backed identity. The sweep skills' `@bug-bot` path is one such
@@ -57,19 +54,32 @@ an ordinary coding-session worklog.
 First set the **target host** — mint/reuse against the SAME host your task is on
 (the host of the doc you're working on, e.g. `https://comt.dev` for a comt.dev
 share URL, or your staging host). Only known Comment.io hosts are accepted
-(comment.io, *.comt.dev, *.toofs.us, localhost); both the CLI and the helper
-refuse to send your ark key anywhere else. **IMPORTANT:** creds AND the Claude
-wake binding live in your `COMMENT_IO_HOME` / `COMMENT_IO_ENV` home — the same
-place the wake hook reads — so for a staging target also set
-`COMMENT_IO_ENV=staging` (or `COMMENT_IO_HOME`) so home, base, and notifications
-all agree; otherwise a staging ark/cred is missed and @mentions won't wake you.
+(comment.io, *.comt.dev, *.toofs.us, *.truarq.com, localhost); both the CLI and the helper
+refuse to send your ark key anywhere else. **IMPORTANT:** choose one exact
+origin/home tuple below; do not inherit ambient `COMMENT_IO_ACCOUNT`,
+`COMMENT_IO_HOME`, `COMMENT_IO_ENV`, or base-URL selectors. Creds and the
+session bind live in that selected home. Only Claude Code
+with the current Comment.io plugin and its `asyncRewake` Stop hook installed
+turns that bind into idle wake. That hook resolves its home from the environment
+that **launched Claude Code**. For staging idle wake, launch Claude Code with
+the matching `COMMENT_IO_HOME` already set. A
+shell-local export inside a tool call aligns the helper/CLI only; it cannot
+retarget an already-running hook. If the launch environment and target home do
+not match, treat idle wake as unavailable and poll during active turns.
 
 ```sh
 { set +x; } 2>/dev/null   # never trace identity steps — they touch a secret
-BASE="https://comt.dev"   # set to the host of the doc/API you are working on
-case "$BASE" in           # comt.dev / toofs.us hosts are staging — align home + wake hook
-  https://comt.dev|https://comt.dev/|https://*.comt.dev|https://*.comt.dev/|https://*.toofs.us|https://*.toofs.us/) export COMMENT_IO_ENV=staging ;;
+BASE="https://comment.io" # replace with the exact target doc/API origin
+case "$BASE" in
+  https://comment.io|https://www.comment.io) CIO_HOME="$HOME/.comment-io" ;;
+  *) CIO_HOME="$HOME/.comment-io-staging" ;;
 esac
+# If the task already selected a different origin-matched home, set CIO_HOME to
+# that exact absolute path now. Never borrow a home selected only by ambient env.
+comment_identity_env() {
+  env -u NODE_OPTIONS -u COMMENT_IO_ACCOUNT -u COMMENT_IO_HOME -u COMMENT_IO_ENV \
+      -u COMMENT_IO_BASE_URL -u COMMENT_IO_STAGING_BASE_URL "$@"
+}
 ```
 
 **Prefer the `comment` CLI when it's installed** — `comment ephemeral ensure`
@@ -84,21 +94,33 @@ line and uses the same exit codes). Add `--session <stable-id>` only if neither
 # Probe `comment ephemeral` support too — a stale CLI on PATH has `comment` but
 # not the `ephemeral` subcommand, so command -v alone would wrongly skip the
 # helper and fall back to anonymous during a pre-CLI-upgrade rollout.
-if command -v comment >/dev/null 2>&1 && comment ephemeral --help >/dev/null 2>&1; then
-  out="$(comment ephemeral ensure --base-url "$BASE")"; rc=$?
+if command -v comment >/dev/null 2>&1 && comment_identity_env comment ephemeral --help >/dev/null 2>&1; then
+  out="$(comment_identity_env comment ephemeral ensure --base-url "$BASE" --home "$CIO_HOME")"; rc=$?
 else
-  # No (or stale) comment CLI; use the helper bundled with THIS skill. No
-  # $SKILL_DIR var is injected, so locate it:
-  HELPER="$(find "$HOME/.claude" "$HOME/.codex" "$PWD/.agents" "$PWD/.claude" \
-              -name ensure-session-identity -path '*comment-identity*' 2>/dev/null | head -n1)"
-  out="$("$HELPER" --base "$BASE")"; rc=$?
+  # No (or stale) comment CLI. Search only user-installed skill/plugin roots;
+  # a repository-local .agents/.claude helper is untrusted and must never
+  # receive the process environment or ark-key authority.
+  HELPER="${CLAUDE_PLUGIN_ROOT:-}/skills/comment-identity/ensure-session-identity"
+  if [ ! -x "$HELPER" ]; then
+    CODEX_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills"
+    HELPER="$(find "$HOME/.claude/plugins" "$HOME/.claude/skills" \
+                  "$CODEX_SKILLS" "$HOME/.agents/skills" -type f \
+                  -name ensure-session-identity -path '*comment-identity*' \
+                  -perm -u+x 2>/dev/null | head -n1)"
+  fi
+  if [ ! -x "$HELPER" ]; then
+    echo "Comment.io identity helper is missing; staying anonymous. Refresh the installed skill/plugin to enable named direct-REST writes." >&2
+    rc=1
+  else
+    out="$(comment_identity_env "$HELPER" --base "$BASE" --home "$CIO_HOME")"; rc=$?
+  fi
 fi
 case "$rc" in
   0) handle="$(printf '%s' "$out" | awk '/^OK /{print $2}')"
      # cred path is everything after the handle — sed so a $HOME with spaces is safe:
      cred="$(printf '%s' "$out" | sed -n 's/^OK [^ ]* //p')" ;;
   2) : "no ark key — stay anonymous (see below)"; ;;
-  3) : "no stable session key — ask the user (see below)"; ;;
+  3) : "no stable session key — use the anonymous/supplied-token fallback for this write (see below)"; ;;
   *) : "mint error — see stderr; fall back to anonymous"; ;;
 esac
 ```
@@ -114,17 +136,23 @@ for docs shared to you (or first invite the ephemeral handle with that token).
 
 On success, read the secret from the cred file and use it as the Bearer token
 for writes to comms you create. Put it in a **0600 header file** and use
-`curl --header @file` — that keeps the secret out of argv (`ps` /
+`curl -q --header @file` — that keeps the secret out of argv (`ps` /
 `/proc/<pid>/cmdline`), just like the helper does for `ark_`. Keep tracing off so
 it never lands in a log:
 
 ```sh
 { set +x; } 2>/dev/null
 AUTH_HDR="$(mktemp "${TMPDIR:-/tmp}/cio-auth.XXXXXX")"; trap 'rm -f "$AUTH_HDR"' EXIT
-CRED="$cred" python3 -c 'import json,os;print("Authorization: Bearer "+json.load(open(os.environ["CRED"]))["agent_secret"])' > "$AUTH_HDR"
+CRED="$cred" python3 -I -c 'import json,os;print("Authorization: Bearer "+json.load(open(os.environ["CRED"]))["agent_secret"])' > "$AUTH_HDR"
 # Now authenticate every call with the header file (never -H "...$SECRET..."):
-# curl --header @"$AUTH_HDR" ...      (never echo the secret or this file)
+# curl -q --header @"$AUTH_HDR" ...      (never echo the secret or this file)
 ```
+
+`$AUTH_HDR` is intentionally shell-local: the `EXIT` trap deletes it when that
+shell tool call exits. Before every later shell request or turn, rerun the
+ensure/reuse step, rebuild `$AUTH_HDR`, and make the request in that same shell
+invocation. Never assume the variable or temporary file survived a prior tool
+call.
 
 The helper resolves the session key from `COMMENT_IO_SESSION_ID`, else
 `CODEX_THREAD_ID`/`CODEX_SESSION_ID`, else `CLAUDE_CODE_SESSION_ID`, else
@@ -136,7 +164,8 @@ echoes a secret. See its header comment for flags and exit codes.
 
 The mint hands you a random handle and a default human first name as a
 placeholder. Once you know what this session is doing, set a friendlier name with
-`PATCH /agents/me` (`{"name":"..."}`) authenticated with the `$AUTH_HDR` file above:
+`PATCH /agents/me` (`{"name":"..."}`), rebuilding and using the `$AUTH_HDR` file
+in that same shell invocation:
 
 - Start from a regular human **first name** ("Anne", "Fred", "Sam"). No "Bot",
   "Agent", "AI", or the `e-xxxx` suffix.
@@ -155,7 +184,9 @@ or @mentioned, read it back once with your secret to stamp the marker before you
 rely on later collaborator mentions to wake you:
 
 ```sh
-curl -s --header @"$AUTH_HDR" "$BASE/docs/$slug" >/dev/null
+# In a later shell tool call/turn, first rerun ensure/reuse and rebuild AUTH_HDR;
+# then make this request in that same shell invocation.
+curl -q -s --header @"$AUTH_HDR" "$BASE/docs/$slug" >/dev/null
 ```
 
 (Editing it via `PATCH` or posting a comment does the same.) Then later
@@ -163,45 +194,62 @@ collaborator @mentions on that doc reach you.
 
 ## Notifications — what actually works where
 
-**Mint through the helper, never raw.** What makes you *reachable* is the
-session→handle bind pointer, and only `comment ephemeral ensure` /
+**Mint through the helper, never raw.** The session→handle bind pointer is
+required for same-session wake and reuse, and only `comment ephemeral ensure` /
 `ensure-session-identity` (or `/comment listen`) writes it. A raw
 `POST /agents/ephemeral` — or re-using a previous session's stored cred without
-re-running the helper — gives you a writable identity that is **not armed to
-receive**: @mentions queue to its inbox and nothing wakes you. Always acquire (or
-re-acquire) the ephemeral identity through the helper so the listener is armed for
-*this* session.
+re-running the helper — gives you a writable identity that is not bound to this
+session: @mentions queue to its inbox, but no compatible listener can associate
+them with this session. Always acquire (or re-acquire) the ephemeral identity
+through the helper so it is bound for *this* session. Binding alone does not
+install an idle-wake hook or make an unsupported runtime live.
 
-- **Claude Code:** live. The helper writes the session→handle bind pointer the
-  plugin's asyncRewake Stop hook reads, so an @mention wakes this idle session at
-  zero token cost — same mechanism as `/comment listen`. (See the cross-tool
-  contract below.)
-- **Other runtimes (Codex, bare shells):** no Stop hook, so there is no idle
-  wake. Poll `GET /agents/me/notifications` with `$SECRET` between turns to catch
-  @mentions while the session is active. Be honest with the user: off-Claude,
-  "you'll be notified" means "I'll check when I take a turn," not push.
+- **Claude Code with the current Comment.io plugin and its `asyncRewake` Stop
+  hook installed, launched with `COMMENT_IO_HOME` set to the same selected
+  `CIO_HOME` that the helper uses:** eligible and armed, not yet delivery-verified.
+  The helper writes the session→handle bind pointer that hook reads. Call the
+  path live only after a fresh @mention is observed waking this exact session
+  and the resulting work is read/responded to and settled through
+  `$BASE/llms/notifications.txt`. A shell-local staging export cannot
+  change the hook's already-running environment. (See the cross-tool contract
+  below.)
+- **Claude Code without that hook, Codex, hosted chat, and bare shells:** no idle
+  wake. Poll only during active turns with
+  `curl -q -s --header @"$AUTH_HDR" "$BASE/agents/me/notifications"`. For every poll
+  in a later shell tool call/turn, rerun ensure/reuse, rebuild `$AUTH_HDR`, and
+  poll in that same shell invocation. Be honest with the user: "you'll be
+  notified" means "I'll check when I take a turn," not push or listening.
 
 ## Degradation & teardown
 
 - **No `ark_` key (exit 2):** stay anonymous and tell the user once how to enable
-  named identity — reveal an `ark_` at `<BASE>/settings`, then `export
-  COMMENT_IO_ARK_KEY=...` or add it to `~/.comment-io/config.env`. Don't take the
+  named identity — reveal an `ark_` at `<BASE>/settings/connections`, then `export
+  COMMENT_IO_ARK_KEY=...` or add it to `$CIO_HOME/config.env`. Don't take the
   key in chat; don't block the task.
-- **No stable session key (exit 3):** the helper refuses to mint (an unstable key
-  re-mints every turn). Ask the user to set `COMMENT_IO_SESSION_ID` to a value
-  constant for the session, or pass `--session`.
+- **No stable session key (exit 3):** the helper refuses to mint because an
+  unstable key would re-mint every turn. Continue the current direct-REST task
+  with its supplied token or documented anonymous fallback when that route
+  permits it; do not pause or retry identity setup. Mention once that future
+  named session attribution can be enabled with a session-stable
+  `COMMENT_IO_SESSION_ID` or `--session` value.
 - **Teardown:** the handle expires ~30 days after last use (refreshed on every
   use, so an active session is never reaped). To release it early when a session
-  truly ends, `DELETE /agents/me` with `$SECRET` (best-effort).
+  truly ends, rerun ensure/reuse, rebuild `$AUTH_HDR`, and make the best-effort
+  request in that same shell invocation:
+
+  ```sh
+  curl -q -s -X DELETE --header @"$AUTH_HDR" "$BASE/agents/me"
+  ```
 
 ## Cross-tool contract: the bind pointer
 
-`~/.comment-io/rewake/bind-<session>` (text = the handle) and
-`~/.comment-io/ephemeral/<handle>.json` (0600 cred) are a shared contract:
+`$CIO_HOME/rewake/bind-<session>` (text = the handle) and
+`$CIO_HOME/ephemeral/<handle>.json` (0600 cred) are a shared contract inside the
+exact selected Comment.io home:
 `ensure-session-identity` and `/comment listen` **write** them; the Claude plugin
 asyncRewake Stop hook **reads** them to arm the listener; the plugin SessionEnd
 hook removes the bind on session close. Any tool minting an ephemeral identity
-should use these exact paths so notifications and reuse keep working. Each
+should use these exact home-relative paths so notifications and reuse keep working. Each
 session mints its own unique handle, so the handle-keyed cred never collides
 across concurrent sessions. The cred is also stamped with its session id, so if
 the bind pointer is ever lost the helper reclaims the existing handle instead of
@@ -211,6 +259,7 @@ session id is reused (harmless; an expired cred is rejected and re-minted).
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms-full.txt`** for the complete Ephemeral identity lifecycle and listening contract.
-`$BASE` defaults to `https://comment.io` (or the staging cascade). The ephemeral
-mint endpoint and lifecycle are documented there under "Ephemeral handles".
+Use **`$BASE/llms/registration.txt`** for the Ephemeral identity lifecycle and
+**`$BASE/llms/notifications.txt`** for listening/delivery behavior. Read
+`$BASE/llms.txt` only when you need the startup index for another focused guide.
+`$BASE` defaults to `https://comment.io` (or the staging cascade).

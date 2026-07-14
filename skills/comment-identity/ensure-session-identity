@@ -23,29 +23,29 @@
 #   --name NAME     mint with this display name (else server assigns a human
 #                   first name as a placeholder; refine later via PATCH /agents/me).
 #   --base URL      override the API base (else the COMMENT_IO_ENV cascade).
+#   --home DIR      override the credential/state home.
 #   --print-secret  ALSO print "SECRET <agent_secret>" — opt-in, for trusted
 #                   non-interactive callers only; off by default.
 #
-# Test seam: set COMMENT_IO_CURL to a stub command to avoid real network.
-
 set +x 2>/dev/null || true   # never trace: keeps ark_/as_ out of any xtrace log
 umask 077                    # any file we create is owner-only by default
+unset NODE_OPTIONS PYTHONPATH PYTHONHOME 2>/dev/null || true # block ambient runtime hooks before any helper
 
 SESS=""
 NAME=""
 BASE_OVERRIDE=""
+HOME_OVERRIDE=""
 PRINT_SECRET=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --session) [ $# -ge 2 ] || { echo "ensure-session-identity: --session needs a value" >&2; exit 1; }; SESS="$2"; shift 2 ;;
     --name)    [ $# -ge 2 ] || { echo "ensure-session-identity: --name needs a value" >&2; exit 1; }; NAME="$2"; shift 2 ;;
     --base)    [ $# -ge 2 ] || { echo "ensure-session-identity: --base needs a value" >&2; exit 1; }; BASE_OVERRIDE="$2"; shift 2 ;;
+    --home)    [ $# -ge 2 ] || { echo "ensure-session-identity: --home needs a value" >&2; exit 1; }; HOME_OVERRIDE="$2"; shift 2 ;;
     --print-secret) PRINT_SECRET=1; shift ;;
     *) echo "ensure-session-identity: unknown arg: $1" >&2; exit 1 ;;
   esac
 done
-
-CURL="${COMMENT_IO_CURL:-curl}"
 
 # Remove the lock + any secret-bearing temp files. Used by both the normal EXIT
 # trap and the INT/TERM traps (which must clean up AND exit, since POSIX sh would
@@ -77,7 +77,7 @@ env_is_staging() { [ "$(printf '%s' "${COMMENT_IO_ENV:-}" | tr '[:upper:]' '[:lo
 # path/query/fragment (e.g. a pasted share URL carrying a token) and rejecting
 # userinfo, so a credential is never sent to the wrong endpoint. Exit 1 if bad.
 normalize_base() {
-  printf '%s' "$1" | python3 -c '
+  printf '%s' "$1" | python3 -I -c '
 import sys, urllib.parse
 u = urllib.parse.urlparse(sys.stdin.read().strip())
 host = (u.hostname or "").lower(); scheme = u.scheme.lower()
@@ -85,13 +85,27 @@ if u.username or u.password or not host:
     sys.exit(1)
 local = host in ("localhost", "127.0.0.1", "::1")
 https_ok = (host == "comment.io" or host == "www.comment.io" or host == "comt.dev" or host.endswith(".comt.dev")
-            or host == "toofs.us" or host.endswith(".toofs.us"))  # *.botlets.dev excluded: legacy 301-redirect
+            or host == "toofs.us" or host.endswith(".toofs.us")
+            or host == "truarq.com" or host.endswith(".truarq.com"))  # *.botlets.dev excluded: legacy 301-redirect
 if (local and scheme in ("http", "https")) or (scheme == "https" and https_ok):
     netloc = u.netloc.split("@", 1)[-1]   # drop any userinfo (already rejected; defensive)
     print(scheme + "://" + netloc)
     sys.exit(0)
 sys.exit(1)
 '
+}
+
+# Unlike a caller-supplied API URL, an origin marker is immutable credential
+# metadata. It must already be a bare origin; never silently discard a path,
+# query, or fragment from config.env and treat the result as an authority.
+normalize_origin_marker() {
+  printf '%s' "$1" | python3 -I -c '
+import sys, urllib.parse
+u = urllib.parse.urlparse(sys.stdin.read().strip())
+if u.username or u.password or u.query or u.fragment or u.path not in ("", "/"):
+    sys.exit(1)
+' || return 1
+  normalize_base "$1"
 }
 
 # Capture the ark key from the environment and scrub it NOW — before ANY
@@ -114,18 +128,19 @@ unset COMMENT_IO_ARK_KEY 2>/dev/null || true
 # Runs after the scrub, so the probe inherits no key either. Probe with
 # `comment ephemeral --help` (NOT `ensure --help`: ensure parses --help via Go's
 # flag package and exits non-zero); grep confirms the subcommand. The CLI
-# re-validates the base against the same approved-origins allowlist. Skipped under
-# the COMMENT_IO_CURL test seam. Capture (not exec) so an older pre-rename CLI
+# re-validates the base against the same approved-origins allowlist. Capture
+# (not exec) so an older pre-rename CLI
 # that writes ethereal/<handle>.json can be migrated before this helper returns.
-if [ -z "$ARK" ] && [ -z "${COMMENT_IO_CURL:-}" ] && command -v comment >/dev/null 2>&1 && comment ephemeral --help 2>/dev/null | grep -q 'ephemeral ensure'; then
+if [ -z "$ARK" ] && command -v comment >/dev/null 2>&1 && comment ephemeral --help 2>/dev/null | grep -q 'ephemeral ensure'; then
   set -- ephemeral ensure
   [ -n "$SESS" ] && set -- "$@" --session "$SESS"
   [ -n "$NAME" ] && set -- "$@" --name "$NAME"
   [ -n "$BASE_OVERRIDE" ] && set -- "$@" --base-url "$BASE_OVERRIDE"
+  [ -n "$HOME_OVERRIDE" ] && set -- "$@" --home "$HOME_OVERRIDE"
   [ -n "$PRINT_SECRET" ] && set -- "$@" --print-secret
   DELEGATED_OUT="$(comment "$@")"; DELEGATED_RC=$?
   if [ "$DELEGATED_RC" -eq 0 ]; then
-    DELEGATED_OUT="$(printf '%s\n' "$DELEGATED_OUT" | python3 -c '
+    DELEGATED_OUT="$(printf '%s\n' "$DELEGATED_OUT" | python3 -I -c '
 import json, os, sys, tempfile
 text = sys.stdin.read()
 lines = text.splitlines()
@@ -193,7 +208,7 @@ fi
 # derive the home from --base: the hook is base-unaware, and a split home would
 # silently break @mention wakes. To target staging, set COMMENT_IO_ENV=staging
 # (or COMMENT_IO_HOME) so home, base, AND the hook all agree.
-CIO_HOME="${COMMENT_IO_HOME:-}"
+CIO_HOME="${HOME_OVERRIDE:-${COMMENT_IO_HOME:-}}"
 if [ -z "$CIO_HOME" ]; then
   if env_is_staging; then CIO_HOME="$HOME/.comment-io-staging"; else CIO_HOME="$HOME/.comment-io"; fi
 fi
@@ -210,7 +225,7 @@ fi
 # and drops any path/query (a pasted share URL token) so it never reaches the
 # wrong endpoint. Approved origins only; localhost for dev.
 if ! BASE="$(normalize_base "$BASE")"; then
-  echo "ensure-session-identity: refusing an unapproved/invalid base — would expose a credential. Approved origins: comment.io, *.comt.dev, *.toofs.us, localhost." >&2
+  echo "ensure-session-identity: refusing an unapproved/invalid base — would expose a credential. Approved origins: comment.io, *.comt.dev, *.toofs.us, *.truarq.com, localhost." >&2
   exit 1
 fi
 
@@ -226,11 +241,137 @@ fi
 [ -n "$SESS" ] || SESS="${CODEX_SESSION_ID:-}"
 [ -n "$SESS" ] || SESS="${CLAUDE_CODE_SESSION_ID:-}"
 
-# --- resolve the owner ark_ key (env wins, else config.env) -------------------
+# --- resolve the owner ark_ key (env wins, else private config.env) -----------
+# Read config only through an owner-only, no-follow descriptor. A long-lived
+# ark_ key must never be accepted from a group/world-readable file, a symlink,
+# a multiply-linked file, or a state home other users can traverse.
+read_private_config_values() {
+  python3 -I - "$1" <<'PY'
+import os, stat, sys
+path = sys.argv[1]
+fd = None
+try:
+    parent = os.path.dirname(path) or "."
+    parent_st = os.lstat(parent)
+    uid = os.geteuid()
+    if (not stat.S_ISDIR(parent_st.st_mode) or stat.S_ISLNK(parent_st.st_mode)
+            or parent_st.st_uid != uid or stat.S_IMODE(parent_st.st_mode) != 0o700):
+        raise OSError("unsafe parent")
+    before = os.lstat(path)
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise OSError("no nofollow")
+    fd = os.open(path, os.O_RDONLY | nofollow)
+    opened = os.fstat(fd)
+    after_open = os.lstat(path)
+    same = lambda a, b: a.st_dev == b.st_dev and a.st_ino == b.st_ino
+    if (not stat.S_ISREG(before.st_mode) or not stat.S_ISREG(opened.st_mode)
+            or not stat.S_ISREG(after_open.st_mode) or stat.S_ISLNK(before.st_mode)
+            or before.st_nlink != 1 or opened.st_nlink != 1 or after_open.st_nlink != 1
+            or before.st_uid != uid or opened.st_uid != uid or after_open.st_uid != uid
+            or stat.S_IMODE(before.st_mode) not in (0o400, 0o600)
+            or stat.S_IMODE(opened.st_mode) not in (0o400, 0o600)
+            or stat.S_IMODE(after_open.st_mode) not in (0o400, 0o600)
+            or not same(before, opened) or not same(opened, after_open)):
+        raise OSError("unsafe config")
+    data = b""
+    while True:
+        chunk = os.read(fd, 8192)
+        if not chunk:
+            break
+        data += chunk
+        if len(data) > 65536:
+            raise OSError("oversized config")
+    after_read_fd = os.fstat(fd)
+    after_read_path = os.lstat(path)
+    stable_meta = lambda a, b: (a.st_size == b.st_size
+                                and a.st_mtime_ns == b.st_mtime_ns
+                                and a.st_ctime_ns == b.st_ctime_ns)
+    if (not same(opened, after_read_fd) or not same(after_read_fd, after_read_path)
+            or not stable_meta(opened, after_read_fd)
+            or not stable_meta(after_read_fd, after_read_path)):
+        raise OSError("config changed during read")
+    values = {"COMMENT_IO_ARK_KEY": "", "COMMENT_IO_BASE_URL": ""}
+    for line in data.decode("utf-8").splitlines():
+        for key in values:
+            prefix = key + "="
+            if line.startswith(prefix):
+                values[key] = line[len(prefix):]
+    if any(any(ord(ch) < 0x20 or ord(ch) == 0x7f for ch in value) for value in values.values()):
+        raise OSError("control character in config")
+    print(values["COMMENT_IO_ARK_KEY"] + "\t" + values["COMMENT_IO_BASE_URL"])
+except Exception:
+    sys.exit(1)
+finally:
+    if fd is not None:
+        try: os.close(fd)
+        except OSError: pass
+PY
+}
+
+CONFIG_ENV="$CIO_HOME/config.env"
+CONFIG_ARK=""
+CONFIG_BASE_URL=""
+if [ -e "$CONFIG_ENV" ] || [ -L "$CONFIG_ENV" ]; then
+  if ! CONFIG_VALUES="$(read_private_config_values "$CONFIG_ENV")"; then
+    echo "ensure-session-identity: refusing unsafe $CONFIG_ENV; require an owner-only 0700 state home and an owner-owned, non-symlink 0400/0600 config file." >&2
+    exit 1
+  fi
+  CONFIG_SEPARATOR="$(printf '\t')"
+  case "$CONFIG_VALUES" in
+    *"$CONFIG_SEPARATOR"*)
+      CONFIG_ARK="${CONFIG_VALUES%%"$CONFIG_SEPARATOR"*}"
+      CONFIG_BASE_URL="${CONFIG_VALUES#*"$CONFIG_SEPARATOR"}"
+      ;;
+    *)
+      echo "ensure-session-identity: refusing malformed $CONFIG_ENV." >&2
+      exit 1
+      ;;
+  esac
+fi
 # ARK was captured + scrubbed from the environment at the top. If it was not in
-# the environment, fall back to config.env (a file read — no env exposure).
-if [ -z "$ARK" ] && [ -f "$CIO_HOME/config.env" ]; then
-  ARK="$(grep -E '^COMMENT_IO_ARK_KEY=' "$CIO_HOME/config.env" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+# the environment, fall back to the already validated config value.
+[ -n "$ARK" ] || ARK="$CONFIG_ARK"
+
+# Every ARK belongs to the selected state home, including a key supplied through
+# COMMENT_IO_ARK_KEY. An approved --base is not authority to redirect it. The
+# legacy production home is fixed to production. The staging home uses its exact
+# config.env origin marker when present (personal staging), else legacy comt.dev.
+# Other custom/ad-hoc homes must always record their exact bare origin.
+if [ -n "$ARK" ]; then
+  CIO_HOME_CANON="$(printf '%s' "$CIO_HOME" | python3 -I -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.stdin.read().strip())))')"
+  PROD_HOME_CANON="$(printf '%s' "$HOME/.comment-io" | python3 -I -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.stdin.read().strip())))')"
+  STAGING_HOME_CANON="$(printf '%s' "$HOME/.comment-io-staging" | python3 -I -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.stdin.read().strip())))')"
+  if [ "$CIO_HOME_CANON" = "$PROD_HOME_CANON" ]; then
+    ARK_BOUND_BASE="https://comment.io"
+  elif [ "$CIO_HOME_CANON" = "$STAGING_HOME_CANON" ]; then
+    ARK_BOUND_BASE="$CONFIG_BASE_URL"
+    if [ -z "$ARK_BOUND_BASE" ]; then
+      ARK_BOUND_BASE="https://comt.dev"
+    elif ! ARK_BOUND_BASE="$(normalize_origin_marker "$ARK_BOUND_BASE")"; then
+      echo "ensure-session-identity: refusing to use an ark key with an invalid COMMENT_IO_BASE_URL origin binding in $CIO_HOME/config.env." >&2
+      exit 1
+    fi
+  else
+    ARK_BOUND_BASE="$CONFIG_BASE_URL"
+    if [ -z "$ARK_BOUND_BASE" ]; then
+      echo "ensure-session-identity: refusing to use an ark key from an origin-unbound custom home. Add COMMENT_IO_BASE_URL=<bare origin> to $CIO_HOME/config.env." >&2
+      exit 1
+    fi
+    if ! ARK_BOUND_BASE="$(normalize_origin_marker "$ARK_BOUND_BASE")"; then
+      echo "ensure-session-identity: refusing to use an ark key with an invalid COMMENT_IO_BASE_URL origin binding in $CIO_HOME/config.env." >&2
+      exit 1
+    fi
+  fi
+  case "$ARK_BOUND_BASE:$BASE" in
+    https://comment.io:https://www.comment.io|https://www.comment.io:https://comment.io) ;;
+    *)
+      if [ "$ARK_BOUND_BASE" != "$BASE" ]; then
+        echo "ensure-session-identity: refusing to send the selected home's ark key to a different Comment.io origin. Use the matching origin-specific home." >&2
+        exit 1
+      fi
+      ;;
+  esac
 fi
 
 # With no stable session key we can neither reuse nor safely mint. Prefer the
@@ -259,7 +400,7 @@ fi
 # (e.g. job/a and job:a) onto the same bind/lock files and cross-wire sessions.
 case "$SESS" in
   *[!A-Za-z0-9._-]*)
-    SESS_SAFE="h-$(printf '%s' "$SESS" | python3 -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:40])')" ;;
+    SESS_SAFE="h-$(printf '%s' "$SESS" | python3 -I -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:40])')" ;;
   *)
     SESS_SAFE="$SESS" ;;
 esac
@@ -281,7 +422,7 @@ harden_perms() {
   #      1 = could not secure (still group/world-writable; cannot mint).
   # Threat is group/world WRITE (planting/replacing bind+cred), so key on 0o022;
   # chmod to 0700 anyway as defense in depth (the cred JSON itself is 0600).
-  D1="$REWAKE_DIR" D2="$EPHEMERAL_DIR" python3 -c '
+  D1="$REWAKE_DIR" D2="$EPHEMERAL_DIR" python3 -I -c '
 import os, sys
 dirs = [os.environ["D1"], os.environ["D2"]]
 was_writable = []
@@ -328,7 +469,7 @@ sys.exit(0)
 ' 2>/dev/null
 }
 harden_legacy_perms() {
-  LEGACY_DIR="$LEGACY_EPHEMERAL_DIR" python3 -c '
+  LEGACY_DIR="$LEGACY_EPHEMERAL_DIR" python3 -I -c '
 import os, sys
 d = os.environ["LEGACY_DIR"]
 if not (os.path.exists(d) or os.path.islink(d)):
@@ -386,7 +527,7 @@ arm_claude_hook_bind() {  # $1 = handle
   # Sanitize before using cc in a filename — an injected ../.. value would write
   # outside REWAKE_DIR. A real Claude UUID is all-safe chars so it passes through
   # (and still matches what the asyncRewake hook reads, bind-<id>).
-  case "$cc" in *[!A-Za-z0-9._-]*) cc="h-$(printf '%s' "$cc" | python3 -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:40])')" ;; esac
+  case "$cc" in *[!A-Za-z0-9._-]*) cc="h-$(printf '%s' "$cc" | python3 -I -c 'import sys,hashlib;print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:40])')" ;; esac
   ccbind="$REWAKE_DIR/bind-$cc"
   [ "$(cat "$ccbind" 2>/dev/null)" = "$1" ] && return 0
   _tmp="$ccbind.tmp.$$"
@@ -402,7 +543,7 @@ arm_claude_hook_bind() {  # $1 = handle
 # session left no cleanup), scan for a cred stamped with THIS session and rebuild
 # the bind pointer — so a bind-write failure can never orphan a minted handle.
 try_reuse() {
-  _h="$(BIND_FILE="$BIND_FILE" EPHEMERAL_DIR="$EPHEMERAL_DIR" LEGACY_EPHEMERAL_DIR="$LEGACY_EPHEMERAL_DIR" LEGACY_STORE_SECURE="$LEGACY_STORE_SECURE" SESS="$SESS" BASE="$BASE" python3 - <<'PY'
+  _h="$(BIND_FILE="$BIND_FILE" EPHEMERAL_DIR="$EPHEMERAL_DIR" LEGACY_EPHEMERAL_DIR="$LEGACY_EPHEMERAL_DIR" LEGACY_STORE_SECURE="$LEGACY_STORE_SECURE" SESS="$SESS" BASE="$BASE" python3 -I - <<'PY'
 import json, os, sys, datetime, glob, tempfile, re
 bind = os.environ["BIND_FILE"]; ed = os.environ["EPHEMERAL_DIR"]; legacy_ed = os.environ["LEGACY_EPHEMERAL_DIR"]; sess = os.environ["SESS"]
 base = os.environ.get("BASE", "")
@@ -590,7 +731,7 @@ PY
   arm_claude_hook_bind "$_h"
   printf 'OK %s %s\n' "$_h" "$_cred"
   if [ -n "$PRINT_SECRET" ]; then
-    SECRET="$(CRED="$_cred" python3 -c 'import json,os;print(json.load(open(os.environ["CRED"]))["agent_secret"])')"
+    SECRET="$(CRED="$_cred" python3 -I -c 'import json,os;print(json.load(open(os.environ["CRED"]))["agent_secret"])')"
     printf 'SECRET %s\n' "$SECRET"
   fi
   return 0
@@ -603,7 +744,7 @@ if [ "${STORE_SECURE:-1}" -eq 0 ] && try_reuse; then exit 0; fi
 # No ark key ⇒ cannot mint. Degrade to anonymous (exit 2) regardless of store
 # state, so a no-ark user never hard-fails on an unusable/insecure store.
 if [ -z "$ARK" ]; then
-  echo "ensure-session-identity: no ark key (set COMMENT_IO_ARK_KEY or add it to $CIO_HOME/config.env; reveal one at $BASE/settings). Staying anonymous." >&2
+  echo "ensure-session-identity: no ark key (set COMMENT_IO_ARK_KEY or add it to $CIO_HOME/config.env; reveal one at $BASE/settings/connections). Staying anonymous." >&2
   exit 2
 fi
 # Minting needs a secured store (0) AND writable. Only an unsecurable store (1,
@@ -619,7 +760,7 @@ check_writable || exit 1
 #  - contents are empty/malformed (holder killed mid-write — defensive), OR
 #  - the holder PID is dead, OR
 #  - the holder PID is ALIVE but the lock is older than the wait window. A
-#    legitimate mint cannot run that long (it is bounded by curl --max-time
+#    legitimate mint cannot run that long (it is bounded by curl -q --max-time
 #    below), so an old "live" lock means PID reuse, not a real mint — stealing
 #    it is safe and avoids wedging identity forever on a recycled PID.
 lock_is_stale() {  # $1 = lock contents
@@ -643,7 +784,7 @@ printf '%s %s\n' "$$" "$(date +%s 2>/dev/null || echo 0)" > "$LOCK_MK" 2>/dev/nu
 trap 'rm -f "$LOCK_MK"' EXIT
 trap 'trap - EXIT; rm -f "$LOCK_MK"; exit 130' INT
 trap 'trap - EXIT; rm -f "$LOCK_MK"; exit 143' TERM
-# Wait at least as long as a legitimate mint can take (curl --max-time 60 below)
+# Wait at least as long as a legitimate mint can take (curl -q --max-time 60 below)
 # plus margin, so a second concurrent caller waits for the in-flight mint and
 # reuses it rather than erroring out. Time-based (date) so it does not depend on
 # sleep granularity; a high iteration cap is just an infinite-loop backstop for
@@ -702,7 +843,7 @@ HDR_FILE="$(mktemp "${TMPDIR:-/tmp}/csi-hdr.XXXXXX")" || { echo "ensure-session-
 printf 'Authorization: Bearer %s\n' "$ARK" > "$HDR_FILE"   # cleaned by _cleanup trap
 
 if [ -n "$NAME" ]; then
-  BODY="$(NAME="$NAME" python3 -c 'import json,os;print(json.dumps({"display_name":os.environ["NAME"]}))')"
+  BODY="$(NAME="$NAME" python3 -I -c 'import json,os;print(json.dumps({"display_name":os.environ["NAME"]}))')"
 else
   BODY='{}'
 fi
@@ -713,11 +854,11 @@ fi
 RESP_FILE="$(mktemp "${TMPDIR:-/tmp}/csi-resp.XXXXXX")" || { echo "ensure-session-identity: mktemp failed" >&2; exit 1; }
 # --max-time bounds the request so the lock holder can never hang indefinitely
 # (a live-but-hung mint is what makes age-based lock stealing unsafe).
-"$CURL" -s --connect-timeout 15 --max-time 60 -X POST "$BASE/agents/ephemeral" --header @"$HDR_FILE" -H 'Content-Type: application/json' -d "$BODY" > "$RESP_FILE"   # both cleaned by _cleanup trap
+curl -q -s --connect-timeout 15 --max-time 60 -X POST "$BASE/agents/ephemeral" --header @"$HDR_FILE" -H 'Content-Type: application/json' -d "$BODY" > "$RESP_FILE"   # both cleaned by _cleanup trap
 rm -f "$HDR_FILE"
 
 # --- persist cred (0600) AND bind pointer, atomically in one python block ----
-HANDLE="$(RESP_FILE="$RESP_FILE" EPHEMERAL_DIR="$EPHEMERAL_DIR" BIND_FILE="$BIND_FILE" BASE="$BASE" SESS="$SESS" python3 - <<'PY'
+HANDLE="$(RESP_FILE="$RESP_FILE" EPHEMERAL_DIR="$EPHEMERAL_DIR" BIND_FILE="$BIND_FILE" BASE="$BASE" SESS="$SESS" python3 -I - <<'PY'
 import json, os, sys, tempfile, re
 with open(os.environ["RESP_FILE"]) as _f:
     resp = _f.read()
@@ -777,7 +918,7 @@ rm -f "$RESP_FILE"
 
 if [ -z "$HANDLE" ]; then
   # Do NOT echo $RESP — it may contain the agent_secret on partial success.
-  echo "ensure-session-identity: mint failed (no handle). Check the ark key at $BASE/settings and retry." >&2
+  echo "ensure-session-identity: mint failed (no handle). Check the ark key at $BASE/settings/connections and retry." >&2
   exit 1
 fi
 
@@ -785,7 +926,7 @@ CRED="$EPHEMERAL_DIR/$HANDLE.json"
 arm_claude_hook_bind "$HANDLE"
 printf 'OK %s %s\n' "$HANDLE" "$CRED"
 if [ -n "$PRINT_SECRET" ]; then
-  SECRET="$(CRED="$CRED" python3 -c 'import json,os;print(json.load(open(os.environ["CRED"]))["agent_secret"])')"
+  SECRET="$(CRED="$CRED" python3 -I -c 'import json,os;print(json.load(open(os.environ["CRED"]))["agent_secret"])')"
   printf 'SECRET %s\n' "$SECRET"
 fi
 exit 0

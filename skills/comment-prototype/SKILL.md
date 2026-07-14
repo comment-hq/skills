@@ -37,10 +37,11 @@ into them** once the change earns the investment.
   (see **Repo config**); never `main`.
 - ✅ a **lightweight worklog** note so the change is watchable and the context
   survives into promotion (one short comm: what you're trying + a running list of
-  what changed). Use the session-scoped ephemeral handle via `comment-identity`.
-  For a genuinely throwaway visual check the user can say "no comm" and you skip it.
-- ✅ a focused check for the change, or nothing for a pure visual tweak — see
-  **Repo config**.
+  what changed). Use the first working Comment.io route and its identity; invoke
+  `comment-identity` only for an uncredentialed direct-REST write. For a genuinely
+  throwaway visual check the user can say "no comm" and you skip it.
+- ✅ a focused affected-test check (typecheck/build + the tests nearest the
+  change), or nothing for a pure visual tweak — see **Repo config**.
 - ✅ **showing the result in the real app**, which is the whole point.
 
 ## Loop
@@ -50,7 +51,8 @@ into them** once the change earns the investment.
    and route to `comment-feature` / `comment-bug` instead (or via `comment-dev`).
 2. **Open the branch** (default `proto/<name>` off fresh `origin/main`, or the
    repo's branch convention) and, unless the user opted out, a **light worklog**
-   note via `worklog` + `comment-identity`.
+   note via `worklog`. Reuse the working Comment.io route; let `worklog` invoke
+   `comment-identity` only if its chosen path is uncredentialed direct REST.
 3. **Implement fast.** Smallest change that makes the idea visible. Don't gold-plate.
 4. **Focused check** (Repo config) — typecheck/build when useful + the nearest test, or
    skip entirely for a pure visual nudge. This catches "it doesn't even compile",
@@ -67,7 +69,7 @@ into them** once the change earns the investment.
 ## Promote — make it real
 
 When the human likes it, harden the *same branch and worklog* through the normal
-merge-ready flow. **Hand the promoted skill the prototype's worklog `share_url` and branch**;
+merge-ready flow. **Hand the promoted skill the prototype's human-openable worklog URL (`share_url` for direct REST) and branch**;
 it **reuses that worklog as the Project Root — upgrading the light note in place
 to the full shape — instead of opening a second**, and keeps building on the
 branch:

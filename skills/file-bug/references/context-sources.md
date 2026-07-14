@@ -83,7 +83,7 @@ the error around the time it happened (token in `.env.local` as `AXIOM_TOKEN`):
 
 ```bash
 source .env.local
-curl -s -H "Authorization: Bearer $AXIOM_TOKEN" -H "Content-Type: application/json" \
+curl -q -s -H "Authorization: Bearer $AXIOM_TOKEN" -H "Content-Type: application/json" \
   -d '{"apl":"[\"comment-docs\"] | where level == \"error\" | take 20","startTime":"<ISO>","endTime":"<ISO>"}' \
   'https://api.axiom.co/v1/datasets/_apl?format=tabular'
 ```

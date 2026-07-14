@@ -18,7 +18,7 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
 
 **Project Root.** Direct `comment-bug` uses its worklog as the Project Root. If the human or caller supplies an existing Project Root URL, preserve it and make the bug worklog a child with `Project Root: URL` near the top. Do not create a second root.
 
-**Identity.** Bug-fix comm activity follows the `worklog` identity rule: before the first Comment.io write, run `comment-identity` and use that session-scoped ephemeral handle for the worklog, evidence comments, steering, and `ship` status updates. If a supplied Project Root/share URL gives only a per-doc token, use that token for the existing root, but do not create new bug worklogs as an ambient registered handle or any Botlets bot profile.
+**Identity.** Bug-fix comm activity follows the `worklog` route-and-identity rule. Reuse the identity carried by the working Comment.io tool/browser/connector route or a supplied Project Root token. Invoke `comment-identity` only immediately before an uncredentialed direct-REST write, then reuse that Ephemeral handle for later direct-REST worklog activity. Do not create bug worklogs as an ambient registered handle or any Botlets bot profile.
 
 **Before using a composed skill, read its full `SKILL.md`** — naming it here does not auto-load its contract (the `ship` review/PR gate, `worklog` update rules), which you must follow.
 
@@ -28,7 +28,7 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
 
 ## Workflow
 
-1. **Open or inherit the Project Root.** If no Project Root URL was supplied, open the worklog (`worklog`) with the bug-shaped body and treat it as the Project Root; patch its own `Project Root: URL` line after creation. If a Project Root URL was supplied, open the bug worklog as a child with that `Project Root: URL` near the top and link it from the root. **Promotion from `comment-prototype`:** if you were handed a prototype's worklog `share_url` and branch, reuse *that* worklog as the Project Root — upgrade its light note in place to the bug-shaped body (don't open a second) — and continue on its branch. Record the symptom and exact reproduction steps first.
+1. **Open or inherit the Project Root.** If no Project Root URL was supplied, open the worklog (`worklog`) with the bug-shaped body and treat it as the Project Root; update its own `Project Root: URL` line after creation. If a Project Root URL was supplied, open the bug worklog as a child with that `Project Root: URL` near the top and link it from the root. **Promotion from `comment-prototype`:** if you were handed a prototype's human-openable worklog URL (`share_url` for direct REST) and branch, reuse *that* worklog as the Project Root — upgrade its light note in place to the bug-shaped body (don't open a second) — and continue on its branch. Record the symptom and exact reproduction steps first.
 2. **Reproduce** the failure deterministically. If you cannot reproduce, say so in the worklog and `steer` to the reporter for details — do not guess a fix.
 3. **Write a regression test that FAILS on the current code** — this proves you've captured the bug. Record the failing output as a comment.
 4. **Diagnose** the root cause; record it in the body with the evidence (logs, traces, the offending code path).
@@ -38,7 +38,7 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
    affected lane on the final committed candidate.
 7. **Review the fix** by explicitly invoking **`$review-loop`** (it runs only on explicit request — this step *is* that request; rounds as comments); fix real findings; re-run until clean. Do this *before* the real-scenario verification so the evidence reflects the final code.
 8. **Verify the real scenario** — on the final post-review-loop code, confirm the original symptom is gone, on the branch preview where applicable (the repo's convention for a per-worktree staging deploy, e.g. `https://<worktree>.toofs.us` here — see the guide; skip if unavailable in your runtime). Capture evidence (screenshot/log) as a comment.
-9. **Ship** with `ship` (pass it the worklog `share_url` and Project Root URL when distinct).
+9. **Ship** with `ship` (pass it the human-openable worklog URL and Project Root URL when distinct).
 
 ## Definition of done
 
@@ -56,7 +56,7 @@ This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. 
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms/reference.txt`** for the exact API and auth contract. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity` or a supplied doc token, not ambient profile selection. Don't restate its contracts here.
+Use the current worklog/Project Root and its working Comment.io route first. Resolve and freeze `$BASE` for the whole workflow in this order: the supplied comm's validated final Comment.io origin after any shortlink redirect; the active Comment.io tool/account base URL; an explicitly selected profile's `base_url`; only when no target context exists, `https://comment.io`. A shortlink origin is never `$BASE`; do not switch a staging/custom workflow to production. For direct REST, consult **`$BASE/llms/reference.txt`** only when exact API or recovery detail is needed. Fetch **`$BASE/llms.txt`** only when no current route works or another focused guide is needed. Invoke `comment-identity` only before an uncredentialed direct-REST write; never replace a supplied token or tool/browser/connector identity. Don't restate the live contracts here.
 
 **Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.
 

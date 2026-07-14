@@ -49,12 +49,13 @@ run alone.
 
 ## Identity
 
-Before creating, patching, or commenting on Comment.io comms, run
-`comment-identity` and prefer the session-scoped ephemeral handle for
-coding-session work. The **Repo config** layer writes only local files (no
-Comment.io identity needed). Exception for comms: if Team Wiki placement or
-reconciling an existing Overview requires a human-selected registered profile
-with the needed library access, use that explicit profile only for those library
+Before creating, patching, or commenting on Comment.io comms, use the first
+working Comment.io route and keep its identity or supplied token. Invoke
+`comment-identity` only immediately before an uncredentialed direct-REST write.
+The **Repo config** layer writes only local files (no Comment.io identity
+needed). Exception for comms: if Team Wiki placement or reconciling an existing
+Overview requires a human-selected registered profile with the needed library
+access, use that explicit profile only for those library
 writes after confirming it is not a Botlets bot profile. Never fall through to an
 ambient default profile just because it exists locally.
 
@@ -115,13 +116,13 @@ human-authored nuance without confirming.
 ## Output / handoff
 
 Return the paths written/updated (`docs/TESTING.md`, the guide's pointer section),
-the Overview `share_url`, and any new ADR `share_url`s. `comment-feature` calls
+the human-openable Overview URL, and any new human-openable ADR URLs. `comment-feature` calls
 `comment-init` to refresh the Overview on merge; the delivery skills rely on the
 Repo config layer existing.
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms/reference.txt`** for the exact API and auth contract. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity`, a supplied doc token, or the explicit Team Wiki profile named in this skill's Identity section, not ambient profile selection. Don't restate its contracts here.
+Use the current architecture comm and its working Comment.io route first. Resolve and freeze `$BASE` for the whole workflow in this order: the supplied comm's validated final Comment.io origin after any shortlink redirect; the active Comment.io tool/account base URL; an explicitly selected profile's `base_url`; only when no target context exists, `https://comment.io`. A shortlink origin is never `$BASE`; do not switch a staging/custom workflow to production. For direct REST, consult **`$BASE/llms/reference.txt`** only when exact API or recovery detail is needed. Fetch **`$BASE/llms.txt`** only when no current route works or another focused guide is needed. Invoke `comment-identity` only before an uncredentialed direct-REST write; otherwise keep the supplied route identity/token or the explicit Team Wiki profile named above. Don't restate the live contracts here.
 
 **Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.
 

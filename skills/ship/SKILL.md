@@ -31,9 +31,9 @@ not redundant reviewers.
 
 ## Preconditions
 
-The **worklog is optional**. When a caller (`comment-feature` / `comment-bug`) passes a worklog `share_url`, post status to it. When a Project Root URL is also passed, preserve it: detailed PR lifecycle notes go to the worklog, while the root gets only concise state changes, blockers, and the PR link. For a standalone `$ship` on an existing PR with no worklog, skip the comm updates and just report status in the PR and terminal — never block the lifecycle on a missing worklog.
+The **worklog is optional**. When a caller (`comment-feature` / `comment-bug`) passes a human-openable worklog URL (`share_url` for direct REST), post status to it. When a Project Root URL is also passed, preserve it: detailed PR lifecycle notes go to the worklog, while the root gets only concise state changes, blockers, and the PR link. For a standalone `$ship` on an existing PR with no worklog, skip the comm updates and just report status in the PR and terminal — never block the lifecycle on a missing worklog.
 
-**Identity for worklog updates.** If a caller passed a worklog/root, use that comm's supplied token or the session-scoped ephemeral identity established by the caller for every status comment/edit. Do not choose a registered profile just because one exists locally, and never switch to a Botlets bot profile for a coding-session worklog. If `$ship` is used standalone and must write to a Comment.io doc before any task identity exists, run `comment-identity` first.
+**Identity for worklog updates.** If a caller passed a worklog/root, keep that route's identity or supplied comm token for every status comment/edit. Do not choose a registered profile just because one exists locally, and never switch to a Botlets bot profile for a coding-session worklog. If `$ship` is used standalone, choose the first working Comment.io route; invoke `comment-identity` only immediately before an uncredentialed direct-REST write.
 
 ## Merge is opt-in — default is "merge-ready", not "merged"
 
@@ -79,6 +79,6 @@ This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. 
 
 ## Comment.io API
 
-**Read `$BASE/llms.txt`** as the current docs index, then **read `$BASE/llms/reference.txt`** for the exact API and auth contract. `$BASE` is the target Comment.io host from the doc URL or session identity (default `https://comment.io`). Profile files may help discover a host, but write identity follows `comment-identity` or a supplied doc token, not ambient profile selection. Don't restate its contracts here.
+Use the active worklog/root and its working Comment.io route first. Resolve and freeze `$BASE` for the whole workflow in this order: the supplied comm's validated final Comment.io origin after any shortlink redirect; the active Comment.io tool/account base URL; an explicitly selected profile's `base_url`; only when no target context exists, `https://comment.io`. A shortlink origin is never `$BASE`; do not switch a staging/custom workflow to production. For direct REST, consult **`$BASE/llms/reference.txt`** only when exact API or recovery detail is needed. Fetch **`$BASE/llms.txt`** only when no current route works or another focused guide is needed. Invoke `comment-identity` only before an uncredentialed direct-REST write; never replace a supplied token or tool/browser/connector identity. Don't restate the live contracts here.
 
 **Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.

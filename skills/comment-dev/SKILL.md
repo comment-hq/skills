@@ -52,10 +52,11 @@ route — don't guess on a high-cost path. When it's clear, just route and say s
 
 ## What carries across the handoff
 
-- **Identity / worklog.** The chosen skill opens the worklog and (via
-  `comment-identity`) the session-scoped ephemeral handle. If the user already
-  has a worklog / Project Root URL for this task, pass it through so the routed
-  skill reuses it instead of opening a second root.
+- **Identity / worklog.** The chosen skill reuses the working Comment.io route
+  and identity already available for the task. It invokes `comment-identity`
+  only immediately before an uncredentialed direct-REST write. If the user
+  already has a worklog / Project Root URL for this task, pass it through so the
+  routed skill reuses it instead of opening a second root.
 - **Repo config.** The routed skills read this repo's setup themselves (see
   **Repo config** below); `comment-dev` doesn't need to.
 
