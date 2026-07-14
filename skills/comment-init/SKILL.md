@@ -3,8 +3,8 @@ name: comment-init
 description: >-
   Initialize or refresh a repo for the `comment-*` skill family. Two layers:
   (1) the **repo config the skills read** — the `AGENTS.md`/`CLAUDE.md` "Agent
-  Skill Config" pointer plus `docs/TESTING.md` (the affected-test lane for
-  iteration, pre-push, PR creation, and merge-ready gates), inferred from the
+  Skill Config" pointer plus `docs/TESTING.md` (focused iteration checks and
+  affected-candidate certification), inferred from the
   repo's build/test setup;
   and (2) the **architecture docs as comms** — one living "Architecture Overview"
   comm plus immutable per-decision ADRs in a Team Wiki folder. Idempotent —
@@ -71,14 +71,14 @@ human-authored nuance without confirming.
    ecosystem signals — `package.json` scripts, `Makefile`/`Justfile`,
    `pyproject.toml`/`tox.ini`, `Cargo.toml`, `go.mod`, `.github/workflows/*`,
    monorepo layout. Identify the affected/local command agents should run before
-   commits, pushes, PRs, and merge-ready handoffs, plus the narrowest focused
-   commands (single file, by-name filter, one package/shard, typecheck-only).
+   candidate certification, plus the narrowest focused commands for local
+   convergence (single file, by-name filter, one package/shard, typecheck-only).
    Record full-suite commands only as manual diagnostics / CI reference, not as
    the routine pre-push gate.
-3. **Derive one local lane:**
-   - **`affected`** — typecheck/build when useful + affected/nearest tests;
-     seconds, scoped to a change, and used for iteration, pre-push, PR creation,
-     and merge-ready gates.
+3. **Derive two levels:**
+   - **focused** — the narrowest useful checks during local convergence.
+   - **`affected`** — typecheck/build when useful + affected/nearest tests, run
+     once against the committed push candidate.
 4. **Write/refresh `docs/TESTING.md`** from the template below. If it exists,
    reconcile (update commands that drifted; keep human notes) and report what
    changed; never overwrite wholesale.
@@ -127,10 +127,10 @@ Repo config layer existing.
 
 ## Templates
 
-**`docs/TESTING.md`** — sections: intro naming the affected lane and when to skip
-it (genuinely docs-only) → `## affected lane` (the narrowest focused commands,
-with a "typecheck/build when useful + affected tests" rule of thumb, used even
-before push / PR) → optional `## full suites` reference (manual diagnostics and
+**`docs/TESTING.md`** — sections: intro naming focused convergence checks and
+affected candidate certification, plus when to skip it (genuinely docs-only) →
+the narrowest focused commands and the final affected command → optional
+`## full suites` reference (manual diagnostics and
 CI only, never the routine pre-push gate) → `## CI / merge norms` → a
 **lane → skill mapping** table. Fill commands from the repo's actual
 `package.json`/`Makefile`/CI — never copy another repo's.

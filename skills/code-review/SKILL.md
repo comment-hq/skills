@@ -68,8 +68,6 @@ Found 3 issues:
 
 <link to file and line with full sha1 + line range for context>
 
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
 <sub>- If this code review was useful, please react with 👍. Otherwise, react with 👎.</sub>
 
 ---
@@ -81,8 +79,6 @@ Found 3 issues:
 ### Code review
 
 No issues found. Checked for bugs and CLAUDE.md compliance.
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
 
 - When linking to code, follow the following format precisely, otherwise the Markdown preview won't render correctly: https://github.com/anthropics/claude-cli-internal/blob/c21d3c10bc8e898b7ac1a2d745bdc9bc4e423afe/package.json#L10-L15
   - Requires full git sha

@@ -58,9 +58,9 @@ claude plugin marketplace add comment-hq/skills
 ## How the skills learn your repo
 
 The skills are repo-agnostic. They read your repo's `AGENTS.md` (or `CLAUDE.md`)
-and the `docs/TESTING.md` it links for the affected-test lane used during
-iteration, pre-push, PR creation, and merge-ready handoffs. Don't have those?
-Run `comment-init` and it scaffolds them.
+and the `docs/TESTING.md` it links for focused convergence checks and final
+candidate certification. Don't have those? Run `comment-init` and it scaffolds
+them.
 
 ## License
 

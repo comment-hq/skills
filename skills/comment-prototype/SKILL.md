@@ -2,9 +2,9 @@
 name: comment-prototype
 description: >-
   Make a small or exploratory change FAST and show it, so you can look before
-  committing to the merge-ready gate. Implements quickly, runs only the repo's
-  affected-test lane (or nothing for a pure visual tweak), and surfaces the
-  result in the real app — deliberately skipping the `review-loop` gate and the
+  committing to the merge-ready gate. Implements quickly, runs only a focused
+  check (or none for a pure visual tweak), and surfaces the result in
+  the real app — deliberately skipping the `review-loop` gate and the
   PR. When you like it, it promotes the work into `comment-feature` /
   `comment-bug` to harden and ship. Invoke as `$comment-prototype` /
   `/comment-prototype`, or when asked to "just try", "quickly tweak", "spike",
@@ -19,7 +19,7 @@ tweaks, an exploratory spike, a "does this even feel right" change. `comment-pro
 optimizes for *time-to-look*, not for merge-readiness — it skips the heavy gate
 on purpose and hands you something to react to fast.
 
-It is the lightweight prototype path of the `comment-dev` family. The
+It is the lightweight, local-only prototype path of the `comment-dev` family. The
 merge-ready paths are `comment-feature` and `comment-bug`; this skill **promotes
 into them** once the change earns the investment.
 
@@ -27,6 +27,7 @@ into them** once the change earns the investment.
 
 - ❌ the **`review-loop`** review gate
 - ❌ opening a **PR** / driving to merge-ready (`ship`)
+- ❌ pushing the prototype branch
 - ❌ the full worklog ceremony (plan, decision log, review rounds)
 
 ## What it still does
@@ -38,8 +39,8 @@ into them** once the change earns the investment.
   survives into promotion (one short comm: what you're trying + a running list of
   what changed). Use the session-scoped ephemeral handle via `comment-identity`.
   For a genuinely throwaway visual check the user can say "no comm" and you skip it.
-- ✅ the affected-test lane (typecheck/build + the tests nearest the
-  change), or nothing for a pure visual tweak — see **Repo config**.
+- ✅ a focused check for the change, or nothing for a pure visual tweak — see
+  **Repo config**.
 - ✅ **showing the result in the real app**, which is the whole point.
 
 ## Loop
@@ -51,7 +52,7 @@ into them** once the change earns the investment.
    repo's branch convention) and, unless the user opted out, a **light worklog**
    note via `worklog` + `comment-identity`.
 3. **Implement fast.** Smallest change that makes the idea visible. Don't gold-plate.
-4. **Affected lane check** (Repo config) — typecheck/build when useful + the nearest test, or
+4. **Focused check** (Repo config) — typecheck/build when useful + the nearest test, or
    skip entirely for a pure visual nudge. This catches "it doesn't even compile",
    not "it's production-ready".
 5. **Show it.** Surface the change in the real app the repo's way (see **Repo
@@ -73,11 +74,11 @@ branch:
 
 - **Feature** → run **`comment-feature`**. It treats the handed-in prototype
   worklog as the root, plans (lightly, since code already exists), runs
-  **`review-loop`** on the diff, runs the affected-test lane, writes the
+  **`review-loop`** on the diff, certifies the final candidate, writes the
   non-technical design, and **`ship`**s to merge-ready.
 - **Bug fix** → run **`comment-bug`**: it reuses the worklog as the root, then
   adds the **regression test that fails without the fix** (a prototype skips
-  this; a real fix must not), `review-loop`, affected tests, ship.
+  this; a real fix must not), `review-loop`, candidate certification, ship.
 
 Promotion does not restart from scratch — the code, branch, worklog, and context
 carry over; it adds the rigor a prototype skipped. Rename the branch to the
@@ -87,14 +88,14 @@ that prefix (see **Repo config**).
 ## Repo config
 
 Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for
-the affected-test lane commands, and the guide's **deploy/preview** section for how
-to run/show the app (or the repo's run skill). Use the affected lane here and
-during promotion. If `docs/TESTING.md` is absent, infer a minimal
+focused checks and candidate certification, and the guide's **deploy/preview**
+section for how to run/show the app (or the repo's run skill). If
+`docs/TESTING.md` is absent, infer a minimal
 typecheck/build from `package.json` / `Makefile`, and offer `comment-init` to
 scaffold the config.
 
 ## Honesty
 
 A prototype is **not validated**. Never describe it as done, tested, or
-merge-ready, and never open a PR or merge from this skill — say plainly "this is
+merge-ready, and never push, open a PR, or merge from this skill — say plainly "this is
 a prototype to look at; promote it to make it real."

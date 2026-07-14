@@ -33,7 +33,9 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
 3. **Write a regression test that FAILS on the current code** — this proves you've captured the bug. Record the failing output as a comment.
 4. **Diagnose** the root cause; record it in the body with the evidence (logs, traces, the offending code path).
 5. **Steer checkpoint** — before committing to a non-obvious fix strategy, run **`steer`**: check for human comments, and escalate the chosen approach if it's risky or ambiguous.
-6. **Fix** minimally and at the right layer. The regression test must now pass. Run the affected-tests lane (`make check`, see **Repo config**) to confirm the regression test and the tests your fix reaches are green — this is the same local lane used through step 7's review and by `ship` before push / PR. CI's `merge_group` matrix is the full-matrix backstop.
+6. **Fix** minimally and at the right layer. The regression test must now pass.
+   Use focused checks while the fix and review converge; `ship` runs the complete
+   affected lane on the final committed candidate.
 7. **Review the fix** by explicitly invoking **`$review-loop`** (it runs only on explicit request — this step *is* that request; rounds as comments); fix real findings; re-run until clean. Do this *before* the real-scenario verification so the evidence reflects the final code.
 8. **Verify the real scenario** — on the final post-review-loop code, confirm the original symptom is gone, on the branch preview where applicable (the repo's convention for a per-worktree staging deploy, e.g. `https://<worktree>.toofs.us` here — see the guide; skip if unavailable in your runtime). Capture evidence (screenshot/log) as a comment.
 9. **Ship** with `ship` (pass it the worklog `share_url` and Project Root URL when distinct).
@@ -50,7 +52,7 @@ Repro, root cause, fix, verification conclusion → worklog **body**. Failing/pa
 
 ## Repo config
 
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for the affected-tests lane used for iteration, pre-push, PR creation, and merge-ready gates, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer an affected/local lane from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
+This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for focused iteration checks and final candidate certification, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer suitable lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
 
 ## Comment.io API
 

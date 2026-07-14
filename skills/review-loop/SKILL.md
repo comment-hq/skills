@@ -31,12 +31,13 @@ phase boundary). Use it standalone on any diff, plan, or PR you want hardened.
    findings. Point them at *real* failure modes: correctness/logic bugs,
    security, regressions, missed or misread requirements, broken edge cases,
    and plan gaps — not style nits or speculative "could refactor" notes.
-2. **Triage the findings.** Keep only the ones that are a **real issue**.
+2. **Wait for the whole panel, then triage the batch.** Never start editing from
+   partial results. Missing or unknown results block the round; they do not count
+   as clean. Keep only the findings that are a **real issue**.
    Discard duplicates, false positives, and pure preference. When a finding is
    debatable, prefer to verify it (read the code, run the case) over guessing.
-3. **Fix real findings one at a time, in priority order** (highest-impact /
-   most-likely-correct first). A fix is new work — re-run the relevant
-   validation for what you touched (see **Repo config**).
+3. **Fix compatible findings together**, in priority order. Then run the
+   narrowest useful validation for the batch (see **Repo config**).
 4. **Re-review with a fresh panel.** Repeat from step 1.
 5. **Exit when a full panel returns no actionable findings.** That clean round
    is the gate passing. Record the rounds (in comm mode, each round is a
@@ -54,14 +55,16 @@ reasoning** and don't treat it as blocking — a real, unresolved disagreement i
 a steer point, not an infinite loop. Convergence means "no *new* actionable
 findings", not "every reviewer fell silent by exhaustion".
 
+If finding-bearing rounds keep recurring, stop patching and reconsider the
+design; three such rounds is a useful signal. Record the invariant or approach
+that changes, then resume with a fresh panel.
+
 ## Repo config
 
-`review-loop` itself is repo-agnostic. When a fix needs validation, run the
-repo's checks rather than ad-hoc ones: read **`AGENTS.md` (else `CLAUDE.md`)**
-and the **affected** lane in the `docs/TESTING.md` it links; if that's absent,
-infer an affected local gate from `package.json` / `Makefile` / CI. The caller
-(`drive-plan` / `ship`) may choose when to run it, but local validation stays on
-the affected lane.
+`review-loop` itself is repo-agnostic. Read **`AGENTS.md` (else `CLAUDE.md`)**
+and the `docs/TESTING.md` it links. Use focused checks during this convergence
+loop; leave the complete affected lane to final candidate certification. If the
+config is absent, infer suitable checks from `package.json` / `Makefile` / CI.
 
 ## Relationship to `code-review`
 
