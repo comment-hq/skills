@@ -68,31 +68,33 @@ into them** once the change earns the investment.
 
 ## Promote — make it real
 
-When the human likes it, harden the *same branch and worklog* through the normal
-merge-ready flow. **Hand the promoted skill the prototype's human-openable worklog URL (`share_url` for direct REST) and branch**;
+When the human likes it, harden the *same code and worklog* through the normal
+delivery flow. Read `delivery-methodology` before choosing the promoted branch:
+keep a direct branch for bounded shippable work, or move the prototype result
+into a controlled lift when the real change is foundational with unsafe
+intermediate states. **Hand the promoted skill the prototype's human-openable worklog URL (`share_url` for direct REST) and branch**;
 it **reuses that worklog as the Project Root — upgrading the light note in place
 to the full shape — instead of opening a second**, and keeps building on the
 branch:
 
 - **Feature** → run **`comment-feature`**. It treats the handed-in prototype
-  worklog as the root, plans (lightly, since code already exists), runs
-  **`review-loop`** on the diff, certifies the final candidate, writes the
-  non-technical design, and **`ship`**s to merge-ready.
+  worklog as the root, chooses direct/lift topology, adds only the missing
+  acceptance/evidence, reviews the bounded delta, and ships the right boundary.
 - **Bug fix** → run **`comment-bug`**: it reuses the worklog as the root, then
   adds the **regression test that fails without the fix** (a prototype skips
-  this; a real fix must not), `review-loop`, candidate certification, ship.
+  this when practical), bounded review, the right candidate certification, and
+  ship.
 
-Promotion does not restart from scratch — the code, branch, worklog, and context
-carry over; it adds the rigor a prototype skipped. Rename the branch to the
-repo's `feat/…` / `bug/…` convention as part of promotion when the repo expects
-that prefix (see **Repo config**).
+Promotion does not restart from scratch or recreate plan/design artifacts. The
+code, worklog, decisions, and useful context carry over; promotion adds only the
+missing rigor. Rename or move the branch to the repo's direct/lift convention as
+required by the chosen topology.
 
 ## Repo config
 
-Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for
-focused checks and candidate certification, and the guide's **deploy/preview**
-section for how to run/show the app (or the repo's run skill). If
-`docs/TESTING.md` is absent, infer a minimal
+Read **`AGENTS.md` (else `CLAUDE.md`)** and linked delivery/testing docs for
+topology, focused checks, candidate certification, and preview. If absent,
+infer a minimal
 typecheck/build from `package.json` / `Makefile`, and offer `comment-init` to
 scaffold the config.
 

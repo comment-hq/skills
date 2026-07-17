@@ -14,7 +14,11 @@ description: >-
 
 `steer` makes a Comment.io comm the place humans steer running agents and agents ask for help — no out-of-band chat thread. It is a **primitive**: `comment-feature` / `comment-bug` call it; use it standalone whenever autonomous work needs a human checkpoint.
 
-`steer` always polls at checkpoints. Push wake can resume the session only when the caller armed it through `comment-identity` or a daemon-backed workflow; you still check the comm deliberately before phase boundaries and after long stretches.
+`steer` polls at material checkpoints: before an irreversible/materially
+ambiguous decision, after a long autonomous stretch, and at a delivery boundary.
+A bookkeeping phase is not automatically a checkpoint. Push wake can resume the
+session only when the caller armed it through `comment-identity` or a
+daemon-backed workflow.
 
 **Identity.** `steer` writes as the active task identity. If the task was opened by `comment-feature`, `comment-bug`, `worklog`, or `drive-plan`, keep using that route's identity or supplied comm token for replies and escalations. If `steer` is used standalone, choose the first working Comment.io route; invoke `comment-identity` only immediately before an uncredentialed direct-REST write. Do not switch to an ambient registered profile or Botlets bot profile mid-task.
 
@@ -22,7 +26,11 @@ description: >-
 
 ### 1. Listen — fold steering in
 
-At natural checkpoints (phase boundaries, before irreversible steps, after long stretches), use the active route's native comment, notification, or read capability to check the task comm for human comments and @mentions newer than the last state you saw. For direct REST only, use the mention/notification and since-revision filters documented in `$BASE/llms/reference.txt` — don't hard-code the query syntax here, it evolves.
+At material checkpoints, use the active route's native comment, notification,
+or read capability to check the task comm for human comments and @mentions newer
+than the last state you saw. Do not poll merely because a plan phase ended. For
+direct REST only, use the mention/notification and since-revision filters
+documented in `$BASE/llms/reference.txt` — don't hard-code query syntax here.
 
 - For each new human comment: incorporate it into the **Plan**/**Decision log** of the worklog, and **reply** in-thread acknowledging what you changed.
 - If a comment contradicts your current plan, the human wins — revise and record why.
@@ -34,7 +42,9 @@ When you hit a decision you shouldn't make alone (product choice, irreversible a
 1. Post a **comment** through the active route that @mentions the human, uses `Decision needed: headline` or `Blocked: headline`, states the decision crisply, lists your recommendation, and says what happens next. For direct REST only, include the required `notify` object from `$BASE/llms/reference.txt`; other routes use their native mention/notification behavior.
 2. Name the blocker in the worklog **Open questions** — this body edit *is* allowed (it's current state, which belongs in the body).
 3. If a Project Root exists and the active comm is a child/Plan doc, add only a one-line blocker summary/link to the root; keep the detailed ask where this skill is polling.
-4. **Wait**: poll on a sensible cadence. Do other non-blocked work meanwhile. Resume when the human replies; if nothing else is doable, stop and hand back with the exact decision needed.
+4. **Hand off honestly:** do other non-blocked work. If nothing else is useful,
+   stop and hand back the exact decision needed. Poll only during an active turn
+   or through a verified monitor; do not occupy a live session indefinitely.
 
 The escalation *discussion* — your ask and the human's replies — stays in **comments** (lists / short lines); only the one-line blocker in **Open questions** goes in the body.
 

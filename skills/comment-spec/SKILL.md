@@ -1,90 +1,97 @@
 ---
 name: comment-spec
 description: >-
-  Shape a raw feature idea into a crisp PM-level spec through a live Comment.io
-  comm, then hand it to comment-feature to build. Nails the goal and success
-  definition, fits the idea to the app's existing concepts, minimizes new
-  user-facing concepts, and runs a self-checking shaping loop that surfaces the
-  risks in the current plan plus ways to address each — so a human can decide how
-  much to iterate before spending engineering time. Forms a falsifiable
-  hypothesis, checks the implied problem against whatever analytics system the
-  codebase uses, and specs the metrics that would prove the hypothesis right or
-  wrong plus a feature-level dashboard to track them. Blocks on goal-level
-  questions and on a final "build it?" go-ahead, then invokes comment-feature.
-  Invoke explicitly as `$comment-spec` / `/comment-spec`, or when asked to spec,
-  shape, scope, or design a feature before building it. Works identically under
-  Codex and Claude Code.
+  Shape a rough product idea into a crisp, proportionate spec through a live
+  Comment.io comm, then hand it to comment-feature when build authority exists.
+  Makes goal, acceptance, delivery topology, key risks, and out-of-scope clear;
+  uses analytics, instrumentation, dashboards, concept mapping, and critic
+  review only when the size of the product bet warrants them. Invoke as
+  `$comment-spec` / `/comment-spec`, or when asked to spec, shape, scope, or
+  design a feature before building. Works identically under Codex and Claude
+  Code.
 ---
 
-# comment-spec — shape a great spec, then build it
+# comment-spec — shape only as much as the decision needs
 
-The altitude **above** `comment-feature`. `comment-feature` builds a feature you've already decided on; `comment-spec` takes a raw idea and shapes it into a spec worth building — clear goal, fits the app, few new concepts — then hands that spec to `comment-feature`. Reachable on its own or routed in via the `comment-dev` front door; when the spec is ready it hands off to `comment-feature` to build.
+Use this above `comment-feature` when goal, product fit, or acceptance is
+materially unsettled. The scarce resource is a clear decision and fast learning,
+not maximal specification. Optimize for the cleanest architecture and smallest
+useful learning step appropriate to the product's current phase.
 
-**Project Root.** Direct `comment-spec` uses the Spec comm as the Project Root. After creation, update `Project Root: URL` near the top with the human-openable Spec comm URL. If the human says to build, pass that Spec URL to `comment-feature` as the Project Root; the feature worklog, Plan, design, and ADR docs are children.
+Act like a fast-moving startup: the goal is a feature users love, not speculative
+enterprise completeness. Prefer the simplest useful hypothesis and real-user
+validation. Add extensibility, exhaustive edge cases, and operational machinery
+only when current evidence, risk, or a hard invariant justifies their cost.
 
-**Operating premise.** Engineering time is cheap (coding agents build fast and build better with full context); the scarce thing is a **clear goal**. So this skill does **not** bias toward the smaller/tighter cut to save dev effort. It optimizes for: (1) a goal crisp enough to tell whether the feature met it, (2) fit with the app's existing concepts, and (3) the fewest **new user-facing concepts**. The build decision is assumed already made — the skill's value is making the tradeoffs in the current plan visible so the human can choose how much to iterate before kicking off the build.
+Direct `comment-spec` uses the Spec comm as Project Root. On build, pass that
+same human-openable URL to `comment-feature`; do not create another root or
+re-derive the approved design.
 
-**"Simpler in concepts" ≠ smaller scope.** Conceptual simplicity means the user has fewer *new* ideas to learn — reuse an existing concept/primitive/mental model instead of inventing one. Cutting scope to save engineering time is **not** a goal here.
-
-**A spec is a falsifiable bet.** Make the bet explicit: a one-sentence **hypothesis** of the form *"we believe \<change\> will cause \<metric/behavior\> to move \<direction + rough magnitude\> for \<who\>, because \<mechanism\>; we're wrong if \<observable\> doesn't move."* The hypothesis is what picks the metrics — each metric exists to prove the hypothesis right or wrong, not as vanity decoration.
-
-**See reality before trusting the stated problem.** A goal usually encodes an implicit claim ("users keep hitting X", "Y is too slow"). Where the product has an analytics system, look at it: confirming or contradicting that claim with data is the fastest route to goal clarity. **Discover which system it is from the repo — don't assume** (it might be a product-analytics tool, an event pipeline, an observability/log backend, a data warehouse, or nothing yet); honor its documented query method and credentials. And a feature that ships without a way to tell whether the bet paid off isn't finished being specced — so the spec also defines the metrics it should move and the dashboard that will watch them.
-
-Composes the primitives and gates: **`comment-identity`** (uncredentialed direct-REST identity fallback), **`worklog`** (the comm's shape + route/identity rule), **`steer`** (human-in-the-loop blocking), and **`comment-feature`** (the build it hands off to). All are sibling skills in this bundle.
-
-**Before using a composed skill, read its full `SKILL.md`** — naming a skill here does not auto-load its contract.
+This skill composes `delivery-methodology`, `worklog`, `steer`, and
+`comment-feature`. Read a composed skill's full `SKILL.md`
+(its `SKILL.md`) before using it.
 
 ## Preconditions
 
-- **Read-only on the codebase.** This skill shapes a spec; it does not edit code or create a worktree. `comment-feature` handles the worktree/branch when the build starts. Run it from anywhere (including `main`).
+This path is read-only on the codebase. It may inspect code, docs, and available
+product evidence, but it does not create a worktree or edit code.
 
 ## Workflow
 
-1. **Open the Spec comm — and establish honest steering.** Create the comm from the **Template** below through the first working Comment.io route. Keep that route's identity or supplied token; invoke `comment-identity` only immediately before an uncredentialed direct-REST write, never for a tool, connector, browser, URL fetch, or read. Save the returned human-openable URL; it is both the deliverable, the steering surface, and the Project Root. Immediately update the real `Project Root: URL` line near the top through the same route. Post a comment naming the two points where you'll block: the **goal sign-off** and the final **"build it?"** gate. @mention the human only when the active route exposes a valid handle; otherwise make it a general comment, hand the human the Spec URL directly, and never invent a handle.
+1. **Open the Spec comm.** Use the template below and the first working
+   Comment.io route. Keep that identity/token; invoke `comment-identity` only
+   immediately before an uncredentialed direct-REST write. Save the
+   human-openable URL and make it the Project Root.
 
-   **Do not pretend to wait** (see `$BASE/llms/notifications.txt` for the current listening and delivery contract). If the chosen route supports session wake, arm it for that same identity. An Ephemeral handle minted for direct REST is never monitored by the daemon; on Claude Code, `comment-identity` / `comment ephemeral ensure` owns same-session mint-or-reuse and `/comment listen` uses its same-session Ephemeral helper route to bind that exact handle. Connected chat apps are pull-only; on other turn-based runtimes check the route's inbox only while an active turn is running or during an explicitly requested bounded foreground wait. Align `COMMENT_IO_ENV`/`COMMENT_IO_HOME` with the target host when the local listener path is used. If this runtime cannot be resumed or checked in that bounded way, use the fire-and-forget fallback in step 8 instead of claiming that the two human gates will wake this session.
+   Be honest about steering. Consult `$BASE/llms/notifications.txt` for the current listening and delivery contract. If this runtime cannot wake, hand back a resumable URL rather than pretending to wait.
+2. **Orient proportionally.** Read the repo guide and the smallest product/
+   architecture surface needed to understand the idea. Do not fan out broad
+   concept mapping for an ordinary bounded feature.
+3. **Make the mandatory core crisp:**
+   - job-to-be-done and who it serves;
+   - observable acceptance/success;
+   - shaped behavior in product terms;
+   - key risks/tradeoffs and out-of-scope;
+   - recommended direct versus controlled-lift topology from
+     `delivery-methodology`.
 
-2. **Orient on the product — don't assume you already know what this app is.** Before you can frame a goal that fits the app, establish *what the product is and who it's for* in plain terms. Read `CLAUDE.md`, the repo's home/agent-doc sources or the current route's focused guide, any landing/marketing surfaces, and the architecture overview (`docs/ARCHITECTURE.md`). Do not fetch generic `$BASE/llms.txt` merely to orient when the current route or local source already answers the question. Capture a 2–3 sentence **"what this app is for"** anchor in the comm; the goal in step 3 must be expressed *relative to that purpose*. (This is the broad-context pass; the deeper concept map comes in step 4.)
+   Ask explicitly whether incremental main delivery would force harmful flags,
+   dual writes, duplicated state, or two systems. Foundational magma-phase work
+   should normally recommend a lift when its intermediate states are unsafe.
+4. **Use evidence when it changes the decision.** Query analytics or logs when
+   the spec makes an important empirical claim and a documented system can test
+   it. State an assumption when no clean evidence exists. Do not turn every idea
+   into an analytics research project.
+5. **Scale measurement to the bet.** A consequential product bet should state a
+   falsifiable hypothesis, useful metrics, needed instrumentation, and perhaps a
+   dashboard. A small workflow/architecture improvement needs only observable
+   acceptance. Never mandate a dashboard as ceremony.
+6. **Review proportionally.** One critic is the default for a material spec; skip
+   for an obvious small one. Add a second lens only for genuine product or
+   architecture risk. Gather one batch, revise once, and do at most two
+   finding-bearing rounds. Accepted tradeoffs are not blockers.
+7. **Steer only on a goal-level fork.** @mention the human only when the active route exposes a valid handle;
+   otherwise make it a general comment, deliver the URL directly, and never invent a handle.
+   Existing authority such as
+   “spec and build this” counts as the build go-ahead unless shaping uncovers a
+   material goal change. Otherwise ask one final “build or iterate?” question.
+8. **Hand off without restarting.** Invoke `comment-feature` with the Project
+   Root URL, approved acceptance, topology recommendation, tradeoffs, and any
+   proportionate measurement work. The Spec is the non-technical design.
 
-3. **Frame the goal, form a falsifiable hypothesis, and check it against reality — this is the one thing that must become crisp.** Write the job-to-be-done, who it's for, and a **success definition you could later check the feature against** (observable / measurable, not "users like it"). Then state the **falsifiable hypothesis** — *"we believe \<change\> will cause \<metric/behavior\> to move \<direction + rough magnitude\> for \<who\>, because \<mechanism\>; we're wrong if \<observable\> doesn't move."* This hypothesis is the spine: it dictates which metrics the measurement plan (step 6) tracks. Then **validate the hypothesis's implied problem against the product's analytics**: discover what analytics system the project uses — look in `CLAUDE.md`, docs, config/env, and dependencies; it could be a product-analytics tool, an event/observability pipeline, a data warehouse, or none — and honor its documented query method and credentials. Look for data that confirms or contradicts the problem the hypothesis assumes. Record what you found. Three outcomes:
-   - **Confirms** → cite the metric; the hypothesis is now reality-grounded.
-   - **Contradicts** (the data tells a different story than the stated problem) → this is a **finding worth a blocking escalation** — the hypothesis may be aimed at the wrong problem.
-   - **No analytics, or no clean metric exists** → say so and state the assumption explicitly (and make sure step 6's new instrumentation starts measuring it, so the next feature isn't flying as blind).
-   If the goal is fuzzy, you find more than one plausible goal, or the data contradicts the hypothesis, **do not shape toward a guess** — `steer`-escalate and wait on your step-1 listener (no listener? use the step-8 fire-and-forget fallback rather than stranding). A wrong goal wastes the whole spec.
+## Done
 
-4. **Map the app's existing concepts** (so the idea fits and stays simple). Fan out read-only explorer subagents over the affected code **and the product's existing concepts**: `docs/ARCHITECTURE.md`, `docs/DOCUMENT-SURFACE.md`, and the relevant `src/`/`cf/`/`packages/` areas. Produce a short **map of existing concepts and primitives** the feature could build on rather than reinvent. Record it in the comm — it's what the conceptual-simplicity dimension scores against.
-
-5. **Shape the feature, then run the shaping loop until clean.** Draft the feature in product terms. Then spin up **3 shaping-critic subagents** (the product-altitude analog of `$review-loop`), each attacking the current draft on the fixed dimensions below. Fix the *real* issues one at a time, in priority order; re-spin a fresh trio; **repeat until a round returns no real issues** — exactly the `review-loop` loop, but the bar is "no unresolved ambiguity or unflagged risk," not "no code defect." Post **each round as a comment** (short list). The dimensions:
-   - **Goal fit** — does the drafted solution actually achieve the step-3 goal? Where is the gap, and is the success definition still checkable against it?
-   - **Conceptual simplicity** — how many **new user-facing concepts** does this add? For each, is there an existing concept/primitive (from the step-4 map) it could reuse or extend instead? Fewer new concepts wins.
-   - **App fit** — does it match existing patterns, navigation, and the product's grain, or fork behavior the boundaries (e.g. `DocumentSurface`) say should stay shared?
-   - **Measurability** — does the step-6 plan actually test the step-3 hypothesis: will the chosen metrics move *because of this feature* (attributable, not confounded), is the expected magnitude realistic, and is there a clear signal that would **falsify** the hypothesis (tell success from failure)?
-   - **Risk** — what could make this *not* meet the goal: dependencies, edge cases, rollout/migration risk, abuse, scale. Each risk must come with **at least one way it could be addressed**.
-   A "real issue" is a genuine ambiguity, a goal gap, an avoidable new concept, an unmeasurable claim, or an unflagged risk. A risk the human may reasonably accept is **not** a blocker — record it as a tradeoff (step 7), don't loop on it.
-
-6. **Spec the measurement plan — the instrument that tests the hypothesis.** The spec is not done until it says how we'll know the step-3 hypothesis held. Define: (a) the **metrics that should move** — chosen because each proves the hypothesis right or wrong — with a **realistic expected magnitude** and the falsification threshold (and current baseline where step 3 found one); (b) the **new datapoints/events to collect** to make those metrics computable (and to backfill any "no clean metric" gap from step 3); and (c) a **feature-level dashboard** — every new feature ships with one, built in **whatever analytics system the project uses** (the one discovered in step 3; honor its dashboard/credential mechanism). The spec *defines* instrumentation + dashboard; `comment-feature` *implements* them as part of the build (call this out explicitly at handoff so they aren't dropped).
-
-7. **Record tradeoffs, don't silently resolve them.** Every risk or fork the loop surfaces goes in the **Tradeoffs & risks** table: the risk in the current plan, one or more ways to address it, and a status (`accepted` / `open`). This table *is* the "here's what you could iterate on" surface. Reserve `steer` blocking-escalations for **goal-level** decisions (forks that change what success means, including a metrics contradiction from step 3); present the rest as accepted-by-default tradeoffs the human can reopen.
-
-8. **Block for the build gate.** When the loop is clean and the goal is signed off, set the comm Status to **Spec ready**, then post a `steer` escalation: state the goal and hypothesis in one line each, the key metric it should move, the open tradeoffs (N of them) and that they can be iterated or accepted, and ask **"Build it now, or iterate on a tradeoff?"** @mention the human only when the active route exposes a valid handle; otherwise use a general comment and deliver the Spec URL plus ask directly. Then wait on your step-1 listener only when it can actually resume this session. On a turn-based runtime, perform only an explicitly requested bounded foreground wait; otherwise use the fire-and-forget fallback below. Do no further work until the human answers — the spec is cheap, a PR is not.
-
-   **Fire-and-forget fallback (no listener possible).** If this runtime cannot hold a listener and the session is about to end, do **not** silently strand the comm. Set **Status: ⏸️ Awaiting human — resume by re-invoking `/comment-spec` on this comm**, leave the pending decision at the top of **Open questions**, and hand back the human-openable Spec comm URL (`share_url` for direct REST) with `Project Root: URL`. A stranded spec must read as obviously resumable, not as dead. (The same applies if you strand at the step-3 goal sign-off.)
-
-9. **Hand off to `comment-feature`.** On go-ahead, invoke **`/comment-feature`** for the feature, passing the **human-openable Spec comm URL as the Project Root** and instructing it to **use the spec as its non-technical design and decision input** (the goal, shaped solution, concepts, accepted tradeoffs) rather than re-deriving the design — and to **include the measurement plan in the build**: instrument the new datapoints and create the feature dashboard. Link the resulting child worklog/PR back into the Spec root when it exists. If the human chose to iterate, fold their direction into the relevant section, re-run the step-5 loop on the changed part, and return to the gate.
-
-## Definition of done
-
-- The **goal + success definition** is crisp enough to later judge whether the feature met it, expressed relative to what the app is for, and the human has signed off on it.
-- There is a **falsifiable hypothesis** (change → metric move → mechanism, with a stated condition that would prove it wrong), and the metrics are derived from it.
-- The implied problem was **checked against the project's analytics** (whichever system it uses) — confirmed, contradicted (and escalated), or recorded as "no analytics / no clean metric, assumption stated."
-- The shaping loop ran to a clean round; **new user-facing concepts are enumerated and justified** against the existing-concepts map.
-- The spec carries a **measurement plan**: metrics that test the hypothesis (with expected magnitude + falsification threshold), new datapoints to collect, and a feature-level dashboard — all flagged for `comment-feature` to implement.
-- Every surfaced risk has at least one remediation and a status; nothing material is silently resolved.
-- The human gave an explicit **build** go-ahead, and `/comment-feature` was invoked with the spec.
+- Goal and acceptance can judge the eventual result.
+- Product behavior, topology, key risks, and out-of-scope are explicit.
+- Empirical claims and measurement are proportionate to the decision.
+- Material open goal forks are answered or visibly awaiting steer.
+- Build authority is recorded before implementation begins.
 
 ## Content vs comments
 
-App-context anchor, goal, hypothesis, metrics check, shaped feature, concepts, measurement plan, tradeoffs table, out-of-scope → comm **body** (current truth). Shaping-loop rounds, steering, and escalations → **comments** (lists / short lines). The Spec root is the primary artifact, but keep process logs, bulky evidence, and review transcripts out of its body.
+Current app anchor, goal, acceptance, shaped behavior, topology, evidence,
+measurement when relevant, risks, and out-of-scope belong in the body. Review
+batch summaries, steering, and escalations belong in concise comments.
 
 ## Comment.io API
 
@@ -92,82 +99,44 @@ Use the Spec comm and its working Comment.io route first. Resolve and freeze `$B
 
 ## Template
 
-Use this shape verbatim (fill in the feature).
-
 ```markdown
 # Spec: <feature>
 
-**Owner:** <@handle when the active route exposes one; otherwise Anonymous session>  ·  **Status:** 🟡 Shaping → _(Spec ready when clean & signed off)_
-
+**Owner:** <@handle when the active route exposes one; otherwise Anonymous session>
+**Status:** Shaping
 Project Root: URL
 
-**Build:** _(add the comment-feature worklog/PR link when handed off)_  ·  **Updated:** <date time>
+## Goal and acceptance
 
----
+**Job:** <what the user needs>
+**Who:** <user/segment>
+**Acceptance:** <observable result>
 
-## What this app is for
+## Shaped behavior
 
-<2–3 plain sentences: what the product is and who it's for — the anchor the goal is framed against>
+<what changes for the user>
 
----
+## Delivery topology
 
-## Goal & success
+**Recommend:** direct / controlled lift
+**Why:** <shippability, architecture, and dual-system reasoning>
+**Feature flag:** not needed / justified by <clean bounded seam + removal>
 
-**Job-to-be-done:** <the user's actual goal, one or two sentences>
-**Who:** <the user/segment>
-**Success looks like:** <observable/measurable signal we could later check the feature against>
+## Evidence and measurement
 
-**Hypothesis:** We believe <change> will cause <metric/behavior> to move <direction + rough magnitude> for <who>, because <mechanism>. We're wrong if <observable that doesn't move>.
+<only what materially informs this bet; state assumptions>
 
-**Problem is real because:** <metric/evidence that confirms it — or "no analytics / no clean metric; assuming <X>" / "⚠️ data suggests <different story> — see open questions">
+## Tradeoffs and risks
 
----
-
-## The shaped feature
-
-<what we're building, in product terms — what the user does and sees>
-
----
-
-## Concepts introduced
-
-| New concept (to the user) | Why it's needed | Existing concept it reuses / builds on |
+| Risk/tradeoff | Treatment | Status |
 |---|---|---|
-| <concept> | <why a new one is unavoidable> | <existing primitive/pattern, or "none — net-new"> |
-
-_(Fewer rows is better. Each net-new row is a thing the user must learn.)_
-
----
-
-## Measurement plan
-
-_Metrics chosen to test the hypothesis above — each proves it right or wrong._
-
-| Metric (tests the hypothesis) | Baseline (if known) | Expected move | Falsified if | New datapoint(s) to collect |
-|---|---|---|---|---|
-| <metric> | <current value or "none yet"> | <realistic magnitude + direction> | <threshold that means it failed> | <event/field to instrument> |
-
-**Feature dashboard:** <name + what it tracks> _(in the project's analytics system; built as part of `comment-feature`)_
-
----
-
-## Tradeoffs & risks
-
-| Risk in the current plan | How it could be addressed | Status |
-|---|---|---|
-| <risk> | <one or more remediations> | accepted / open |
-
----
+| <risk> | <mitigation or accepted consequence> | accepted / open |
 
 ## Out of scope
 
-- <thing we are deliberately not doing, and why>
+- <deliberate exclusion>
 
----
+## Open questions
 
-## Open questions (blocking)
-
-- <goal-level fork awaiting a human decision> *(awaiting steer — see comments)*
+- <goal-level blocker, if any>
 ```
-
-Follow the skeleton above; keep the app anchor, goal, hypothesis, metrics check, shaped feature, concepts, measurement plan, and tradeoffs in the body and every loop/steer round in comments.

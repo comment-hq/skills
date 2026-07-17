@@ -3,8 +3,8 @@ name: comment-init
 description: >-
   Initialize or refresh a repo for the `comment-*` skill family. Two layers:
   (1) the **repo config the skills read** — the `AGENTS.md`/`CLAUDE.md` "Agent
-  Skill Config" pointer plus `docs/TESTING.md` (focused iteration checks and
-  affected-candidate certification), inferred from the
+  Skill Config" pointer plus `docs/DELIVERY.md` (topology, bounded review, and
+  receipts) and `docs/TESTING.md` (focused iteration and final certification), inferred from the
   repo's build/test setup;
   and (2) the **architecture docs as comms** — one living "Architecture Overview"
   comm plus immutable per-decision ADRs in a Team Wiki folder. Idempotent —
@@ -23,8 +23,10 @@ description: >-
 
 1. **Repo config (on disk, in the repo)** — the files those skills read to learn
    *this* repo, so they stay generic and don't hardcode commands:
-   - the **Agent Skill Config** pointer in **`AGENTS.md` (else `CLAUDE.md`)**, and
-   - **`docs/TESTING.md`** — the affected-test lane.
+   - the **Agent Skill Config** pointer in **`AGENTS.md` (else `CLAUDE.md`)**;
+   - **`docs/DELIVERY.md`** — direct/lift topology, bounded review receipts,
+     pragmatic completion, and promotion rules; and
+   - **`docs/TESTING.md`** — focused and final-candidate lanes.
 2. **Architecture docs (as Comment.io comms)**:
    - **Architecture Overview** — ONE living comm: *what is true now* (system
      overview, component boundaries, data flows, a Mermaid diagram, invariants).
@@ -41,7 +43,7 @@ run alone.
 ## When to use
 
 - **First-time setup** of a repo for the `comment-*` skills → run the Repo config
-  layer (scaffold `docs/TESTING.md` + the pointer), then optionally the Overview.
+  layer (scaffold `docs/DELIVERY.md`, `docs/TESTING.md`, and the pointer), then optionally the Overview.
 - A repo where the skills couldn't find test lanes / the pointer → scaffold them.
 - After a structural change → refresh the Overview (idempotent) and the config if
   build/test commands changed.
@@ -76,19 +78,29 @@ human-authored nuance without confirming.
    convergence (single file, by-name filter, one package/shard, typecheck-only).
    Record full-suite commands only as manual diagnostics / CI reference, not as
    the routine pre-push gate.
-3. **Derive two levels:**
+3. **Derive topology and two test levels:**
+   - **direct** — complete independently shippable task branch;
+   - **controlled lift** — foundational work with unsafe intermediate states;
+     feature flags are exceptional and require a clean bounded seam;
    - **focused** — the narrowest useful checks during local convergence.
    - **`affected`** — typecheck/build when useful + affected/nearest tests, run
-     once against the committed push candidate.
-4. **Write/refresh `docs/TESTING.md`** from the template below. If it exists,
+     once against a direct candidate or frozen lift promotion.
+4. **Write/refresh `docs/DELIVERY.md`** with topology selection, bounded SHA
+   review, hard subject/delta scope locks, the unrelated-discovery issue/
+   escalation protocol, risk tiers, receipt schema, startup pragmatism,
+   technical-ready state, and lift freeze/promotion. Reconcile existing human
+   nuance. State explicitly that complexity and speculative enterprise/edge-case
+   hardening require evidence while hard safety/integrity invariants remain.
+5. **Write/refresh `docs/TESTING.md`** from the template below. If it exists,
    reconcile (update commands that drifted; keep human notes) and report what
    changed; never overwrite wholesale.
-5. **Write/refresh the Agent Skill Config pointer** in the guide: a short section
-   linking **affected test lane → `docs/TESTING.md`**, **PR/branch/merge norms**,
+6. **Write/refresh the Agent Skill Config pointer** in the guide: a short section
+   linking **delivery topology → `docs/DELIVERY.md`**, **affected/final test lane
+   → `docs/TESTING.md`**, **PR/branch/merge norms**,
    **deploy/preview**, and **architecture → `docs/ARCHITECTURE.md`** + the Overview
    comm. Keep the load-bearing commands inline in the guide too (agents that
    auto-load `AGENTS.md` — e.g. Codex — won't follow links on their own).
-6. **Confirm before overwriting** anything a human clearly hand-authored — surface
+7. **Confirm before overwriting** anything a human clearly hand-authored — surface
    a diff and `steer` if unsure.
 
 ## Workflow — Architecture Overview
@@ -107,15 +119,16 @@ human-authored nuance without confirming.
 
 ## Idempotency rules
 
-- **Repo config** — reconcile `docs/TESTING.md` and the pointer in place; update
-  drifted commands, preserve human notes, never duplicate the section or clobber.
+- **Repo config** — reconcile `docs/DELIVERY.md`, `docs/TESTING.md`, and the
+  pointer in place; update drifted commands, preserve human notes, never
+  duplicate the section or clobber.
 - One Overview per codebase — always reconcile the existing comm.
 - One ADR folder — reuse the folder id recorded in the Overview; don't create a second.
 - ADRs are append-only — never rewrite an accepted ADR's body; supersede it (the only allowed edit is the narrow `Status` / `Superseded by` header flip).
 
 ## Output / handoff
 
-Return the paths written/updated (`docs/TESTING.md`, the guide's pointer section),
+Return the paths written/updated (`docs/DELIVERY.md`, `docs/TESTING.md`, the guide's pointer section),
 the human-openable Overview URL, and any new human-openable ADR URLs. `comment-feature` calls
 `comment-init` to refresh the Overview on merge; the delivery skills rely on the
 Repo config layer existing.
@@ -128,8 +141,13 @@ Use the current architecture comm and its working Comment.io route first. Resolv
 
 ## Templates
 
+**`docs/DELIVERY.md`** — sections: direct versus controlled-lift choice → feature
+flags as a bounded exception → explicit SHA delta review and risk tiers → receipt
+schema → pragmatic completion → technical-ready versus merged → lift freeze and
+promotion.
+
 **`docs/TESTING.md`** — sections: intro naming focused convergence checks and
-affected candidate certification, plus when to skip it (genuinely docs-only) →
+direct/final-promotion certification, plus when to skip it (genuinely docs-only) →
 the narrowest focused commands and the final affected command → optional
 `## full suites` reference (manual diagnostics and
 CI only, never the routine pre-push gate) → `## CI / merge norms` → a
@@ -137,7 +155,7 @@ CI only, never the routine pre-push gate) → `## CI / merge norms` → a
 `package.json`/`Makefile`/CI — never copy another repo's.
 
 **Agent Skill Config pointer** (in `AGENTS.md`/`CLAUDE.md`) — a short section:
-affected test lane → `docs/TESTING.md`; PR/branch/merge norms → the guide's sections;
+delivery topology → `docs/DELIVERY.md`; final test lane → `docs/TESTING.md`; PR/branch/merge norms → the guide's sections;
 deploy/preview → the guide's deploy section; architecture → `docs/ARCHITECTURE.md`
 + the Overview comm. Keep the core test/build/deploy commands inline in the guide.
 

@@ -1,81 +1,92 @@
 ---
 name: drive-plan
 description: >-
-  Drive a multi-phase plan to completion autonomously — ideally a Comment.io
-  "Plan" comm (falling back to a local Markdown plan file) as the living source
-  of truth. Implements each phase, validates locally and on staging where
-  possible, keeps the plan in sync, runs `$review-loop` at phase boundaries, and steers
-  to a human when a decision shouldn't be made alone. Composes worklog/steer/review-loop
-  and is the execution engine `comment-feature` delegates to. Invoke as
-  `$drive-plan` / `/drive-plan`, or when asked to execute a phased plan
-  autonomously. Works identically under Codex and Claude Code.
+  Drive a multi-phase implementation plan to completion through a Comment.io
+  Plan/worklog or local Markdown plan. Uses phases as execution organization,
+  not automatic gates; validates focused deltas, invokes bounded risk-scaled
+  review at delivery-slice or changed-invariant boundaries, keeps the plan
+  current, and steers only on real decisions. Invoke as `$drive-plan` /
+  `/drive-plan`, or when asked to execute a phased plan autonomously. Works
+  identically under Codex and Claude Code.
 ---
 
-# drive-plan — the phased-plan execution engine
+# drive-plan — execute to acceptance, not endless polish
 
-Drive one multi-phase plan to completion, moving through every phase autonomously until the plan is done or a stop condition is reached. This is a **generic, reusable engine**: use it standalone on any phased plan, and note that `comment-feature` / `comment-bug` delegate their execution step to it.
+Read `delivery-methodology`, the repo's `AGENTS.md`/`CLAUDE.md`, and linked
+delivery/testing docs before implementation. Preserve a supplied Project Root.
+Use the supplied Plan comm/file; create a separate Plan via `worklog` only when
+the initiative's complexity benefits from one.
 
-## Source of truth — prefer a Plan comm
+## Source of truth
 
-The plan is the living source of truth for scope, current state, validation evidence, and remaining work. Prefer a **Comment.io Plan comm** so humans can watch and steer; fall back to a local Markdown plan file only when no Comment.io credentials are available or the user asked for a local file.
+Keep scope, acceptance, delivery slices, topology, decisions, material status,
+receipts, and remaining risks current in the Plan/worklog body. Put review batch
+summaries, steering exchanges, and escalations in comments. Local-file mode
+keeps both current state and a concise evidence log in the file.
 
-- Given a Plan comm URL/slug → drive that comm.
-- Given a Markdown plan file → drive that file.
-- Given a plan but no comm, and credentials exist → open one via `worklog` (Plan shape) and drive it.
-- Given a Project Root URL by `comment-feature` / `comment-bug` → preserve it. Any Plan comm you create is a child with `Project Root: URL` near the top and a link from the root. Standalone `drive-plan` does not create a Project Root just for itself.
-
-**Identity.** In comm mode, every Plan comm that `drive-plan` creates goes through `worklog`, so keep the working route's identity or a supplied Plan token for all plan edits, evidence comments, and steering comments. Invoke `comment-identity` only if that route is uncredentialed direct REST, then reuse that Ephemeral handle for later direct-REST writes. Do not switch to an ambient registered profile, a Botlets bot profile, or a different identity mid-task. Markdown-file mode makes no Comment.io writes.
-
-**Where things go** depends on the mode:
-- **Comm mode** (preferred): phase tasks, acceptance criteria, status, decisions, and scope changes are **document body**, kept in sync as you go (check `- [x]` boxes, update status). Every `$review-loop` round, steering exchange, validation-evidence note, and escalation is a **comment** — a list or short lines, never one paragraph. If a Project Root exists, keep bulky evidence in the Plan comm/comment stream and add only short summaries or links to the root.
-- **Markdown-file mode** (no comm): everything goes **in the file** — update the phase/status/decisions in place, and record validation evidence + `$review-loop` round summaries in a "Log" section of the file. Do **not** create a Comment.io doc you weren't given; steering in this mode is direct to the user.
+Keep the working Comment.io route/identity. Invoke `comment-identity` only
+immediately before an uncredentialed direct-REST write; never switch to an
+ambient registered or Botlets identity.
 
 ## Operating rules
 
-- Keep all phase status, scope changes, decisions, assumptions, validation results, and follow-ups in the plan body — revise it whenever reality changes (new constraints, reordered work, added/removed tasks, shifted scope).
-- Make reasonable implementation decisions without asking; record meaningful assumptions and keep moving.
-- Don't declare a phase done just because its listed tasks are checked — hunt for unfinished work, test gaps, edge cases, stale plan text, and follow-up fixes first.
-- Work through all phases; stop only on a stop condition below.
+- Make reasonable implementation decisions and record only material ones.
+- Work one bounded delta at a time with an explicit base and intended head.
+- Optimize for the simplest user-useful implementation; do not add speculative
+  enterprise hardening, abstraction, or hypothetical edge-case machinery.
+- Run the narrowest useful checks while editing.
+- A phase is not automatically a review, staging, steering, or artifact gate.
+- Review at a delivery-slice boundary, when a sensitive invariant changes, or
+  when uncertainty makes review useful.
+- Update the worklog at material milestones, not every command or minor edit.
+- Stop when acceptance/evidence hold and no known severity blocker remains;
+  record optional polish and unrelated cleanup as follow-ups.
 
-## Phase loop
+## Delta loop
 
-For each phase:
+For each delivery slice or direct candidate:
 
-1. **Normalize** the phase into concrete tasks in the plan body.
-2. **Implement** incrementally, keeping edits scoped to the phase.
-3. **Validate locally** with the narrowest useful checks for the phase. Leave the
-   complete affected lane to `ship`'s final candidate certification.
-4. **Validate on staging** when the project supports it and the change benefits from deployed verification. Never deploy to production unless the repo/user instructions explicitly allow it.
-5. **Prove it works** before moving on; capture the commands, URLs, logs, or manual checks as evidence (comm mode → a **comment**; file mode → the plan's "Log" section).
-6. **Update the plan** with the real outcome, plan changes, and remaining risks (the comm body, or the file).
-7. **`$review-loop`** the phase result (plan + diff + evidence). Record each round as evidence (comm mode → a **comment**; file mode → the "Log" section).
-8. If `$review-loop` returns real issues: wait for the full batch, fix compatible
-   findings together, update the plan, run focused validation, and re-review.
-9. **`steer` checkpoint** — before an irreversible or ambiguous step, and at phase boundaries, get human input on decisions you shouldn't make alone (comm mode → poll the comm via `steer` and pass the Project Root URL when one exists; file mode → ask the user directly) and escalate.
-10. Mark the phase complete only after implementation, validation, plan update, and a clean `$review-loop` round.
+1. Normalize scope, acceptance, invariants, base SHA, topology, and evidence.
+2. Implement the smallest coherent delta that satisfies that boundary.
+3. Run focused checks. Use staging/preview only when deployed behavior adds
+   material evidence.
+4. Update the plan with the real outcome and remaining risk.
+5. When review is warranted, invoke `review-loop` with explicit base/head and
+   risk tier. Lock it to the declared subject and delta, fix one complete batch,
+   and record its receipt. Route unrelated discoveries to a GitHub issue per
+   `delivery-methodology`; do not absorb them into the slice.
+6. Poll `steer` before an irreversible/materially ambiguous decision, after a
+   long autonomous stretch, or at a delivery boundary. Continue when no real
+   decision blocks useful work.
+7. Mark the boundary complete when acceptance and required evidence pass, no
+   known blocker remains, mandatory repo rules hold, and residual risks are
+   explicit.
+8. Move to the next slice or hand the completed boundary to `ship`.
 
-## Autonomy standard
+Normal work gets at most two finding-bearing review rounds. Repeated findings
+trigger redesign, targeted proof, residual-risk recording, or human escalation.
 
-At every phase boundary, ask whether there is another useful action available without user input — strengthen validation, inspect logs/errors, test a realistic workflow, update stale plan text, close obvious quality gaps, reduce known risk, document residual risk, or prepare the next phase to start cleanly. If any exists, do it before moving on or stopping.
+## Lift execution
 
-## Repo config
-
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for focused iteration checks and final candidate certification, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer suitable lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
-
-## Composes
-
-- **`worklog`** — to open the Plan comm when one isn't supplied.
-- **`steer`** — for human checkpoints and escalations. Polling is the canonical check; push wake may resume the session only when the caller armed it through `comment-identity` or a daemon-backed workflow.
-- **`$review-loop`** — the review-loop gate at every phase boundary.
-- Optionally **`ship`** — when a phase ends in a deliverable PR that should reach merge-ready.
-
-Read a composed skill's full `SKILL.md` before relying on it — naming it here doesn't auto-load its contract.
+For a controlled lift, keep the ordered receipt ledger in the Project Root,
+merge slices sequentially into the lift with real merge commits, sync the release
+base periodically, and use `delivery-methodology`'s freeze/coverage/promotion
+barrier. Do not let a late slice land after promotion begins.
 
 ## Stop conditions
 
-Stop and ask the human only when:
+Stop for a human only when a new fact materially changes the goal/feasibility,
+or when an external action, permission, secret, or product decision blocks all
+useful work. Update the current-state body first and ask one crisp question.
 
-- Something fully unexpected drastically changes the feasibility, direction, cost, or risk of the plan — proceeding would amount to choosing a new plan.
-- You've exhausted the autonomous work and need a user action, secret, permission, product decision, or explicit approval that can't be reasonably inferred.
+## Composes
 
-When stopping, update the plan body first with the current state, evidence, the blocker, and the exact decision or action needed — then escalate via `steer`. If a Project Root exists, the pause/final handoff ends with `Project Root: URL`.
+Read the full `SKILL.md` before using
+`delivery-methodology`, `worklog`, `steer`, `review-loop`, or `ship`.
+
+## Repo config
+
+Run the repo's commands, not hardcoded ones. Read `AGENTS.md` (else
+`CLAUDE.md`) and linked delivery/testing/deploy docs. If missing, infer focused
+checks and final certification from package/build/CI config and offer
+`comment-init`.

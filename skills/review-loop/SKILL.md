@@ -1,77 +1,119 @@
 ---
 name: review-loop
 description: >-
-  Review a change (a code diff, a plan, or a PR) with a panel of independent
-  review subagents and loop — fix the real findings, re-review with a fresh
-  panel — until a full panel comes back with nothing actionable. The local,
-  pre-PR "iterate until clean" gate the delivery skills run at plan and phase
-  boundaries. Distinct from `code-review`, which posts one official review to a
-  PR; `review-loop` is the in-flight convergence loop. Only invoke when
-  explicitly requested as `$review-loop` / `/review-loop`, or when a delivery
-  skill calls it. Works identically under Codex and Claude Code. (Formerly
-  `3wise`.)
+  Review an explicit plan/code/PR SHA delta with a risk-scaled panel, fix one
+  complete finding batch, validate the changed delta, and emit a durable review
+  receipt. Defaults to one reviewer, adds targeted lenses for sensitive work,
+  caps normal finding-bearing rounds, and avoids re-reading already certified
+  branch history. Only invoke as `$review-loop` / `/review-loop`, or when a
+  delivery skill calls it. Works identically under Codex and Claude Code.
 ---
 
-# review-loop — converge a change to "no real findings"
+# review-loop — bounded delta review with receipts
 
-A panel of **independent** reviewers is better than one: each catches blind
-spots the others miss, and looping until the panel is quiet is what turns
-"probably fine" into "reviewed". `review-loop` runs that panel and drives the
-change to convergence.
+Read `delivery-methodology` and repo instructions first. Review is a risk-control
+tool, not a stochastic search for a panel that eventually says nothing.
 
-This is a **gate primitive**: `comment-feature`, `comment-bug`, `comment-spec`,
-and `drive-plan` invoke it (on the plan before building, and on the diff at each
-phase boundary). Use it standalone on any diff, plan, or PR you want hardened.
+## Required target
 
-## The loop
+Do not start from “review this branch.” Name:
 
-1. **Spin up a panel of independent review subagents** (default **3**) on the
-   target — `$ARGUMENTS` names what to review (a diff, a plan, a PR, a file
-   set). Each reviewer works independently; do not let them see each other's
-   findings. Point them at *real* failure modes: correctness/logic bugs,
-   security, regressions, missed or misread requirements, broken edge cases,
-   and plan gaps — not style nits or speculative "could refactor" notes.
-2. **Wait for the whole panel, then triage the batch.** Never start editing from
-   partial results. Missing or unknown results block the round; they do not count
-   as clean. Keep only the findings that are a **real issue**.
-   Discard duplicates, false positives, and pure preference. When a finding is
-   debatable, prefer to verify it (read the code, run the case) over guessing.
-3. **Fix compatible findings together**, in priority order. Then run the
-   narrowest useful validation for the batch (see **Repo config**).
-4. **Re-review with a fresh panel.** Repeat from step 1.
-5. **Exit when a full panel returns no actionable findings.** That clean round
-   is the gate passing. Record the rounds (in comm mode, each round is a
-   *comment*; see the calling skill).
+- artifact type and scope;
+- `base_sha` and `head_sha` (or exact plan revision);
+- acceptance criteria and important invariants;
+- risk tier and requested lenses;
+- focused checks/evidence already available.
 
-Scale the panel to the stakes: 3 is the default; widen it (5+, or give each
-reviewer a distinct lens — correctness, security, does-it-actually-reproduce)
-for high-blast-radius changes, and you may run a single reviewer for a trivial
-diff.
+Treat the declared subject, acceptance criteria, invariants, and
+`base_sha..head_sha` as a hard scope lock. Read only the surrounding context
+needed to validate impact; untouched context is evidence, not a new audit
+surface. A finding is in scope only if the target delta introduced or changed
+it, or the delta makes an existing path violate an explicit acceptance
+criterion/invariant. An explicit plan review may use plan revisions instead of
+Git SHAs.
 
-## Decline, don't loop forever
+## Risk-scale the panel
 
-If a reviewer raises something you intentionally won't change, **record the
-reasoning** and don't treat it as blocking — a real, unresolved disagreement is
-a steer point, not an infinite loop. Convergence means "no *new* actionable
-findings", not "every reviewer fell silent by exhaustion".
+- **Routine:** one reviewer.
+- **Sensitive:** two independent reviewers/lenses for authorization,
+  migrations/storage, protocol/compatibility, concurrency, native code,
+  destructive behavior, or credible data-loss risk.
+- **Exceptional:** three only for exceptional blast radius.
 
-If finding-bearing rounds keep recurring, stop patching and reconsider the
-design; three such rounds is a useful signal. Record the invariant or approach
-that changes, then resume with a fresh panel.
+Reviewers report concrete failure paths, violated requirements/invariants, and
+evidence. Exclude style nits, speculative refactors, unrelated pre-existing
+debt, unsupported hypotheticals, and issues a required compiler/linter already
+settles unless they reveal a missing gate.
+
+Bias toward the simplest implementation that satisfies current user acceptance.
+Do not block on imagined enterprise needs, unnecessary abstraction, or
+combinatorial edge cases without a credible reachable failure. Hard correctness,
+security/privacy, data-loss, migration, and protocol failures remain blockers.
+
+## Out-of-scope discovery protocol
+
+Reviewers report a genuinely unrelated defect separately as an **out-of-scope
+discovery**, never as a finding against the reviewed target, and stop exploring
+it after collecting enough evidence to identify it. The orchestrating agent:
+
+1. Searches the GitHub issue ledger and attaches the evidence, or creates one
+   focused issue (use `file-bug` when available).
+2. Links the issue in the receipt/worklog and continues the original review.
+3. Stops only when the discovery is actively release-breaking, creates a
+   credible security/privacy or data-loss emergency, or makes this delivery
+   unsafe to evaluate. Ask the owner human to start a separate worktree job;
+   never silently absorb the fix into the current branch.
+
+A regression introduced or exposed by the target delta remains in scope.
+
+## Bounded loop
+
+1. Run the requested reviewer(s) independently and wait for the complete batch.
+   Missing requested results are unknown, not success.
+2. Triage duplicates and false positives. Verify debatable claims from code or a
+   focused case. Keep only actionable blockers or explicit residual risks.
+3. Fix compatible findings together and run the narrowest useful validation.
+4. If another review is needed, target `last_reviewed_head..HEAD` plus the
+   surrounding code/invariants actually invalidated by the fix. Do not re-run a
+   fresh full panel over already certified history.
+5. Normal work gets at most two finding-bearing rounds. Continued findings mean
+   redesign, targeted proof, a recorded residual risk, or human decision.
+6. Exit when acceptance and invariants hold, required evidence passes, and no
+   known actionable blocker remains. A reviewer need not fall silent about
+   non-blocking preferences.
+
+## Receipt
+
+Emit one receipt containing:
+
+```text
+base_sha: <review base>
+head_sha: <accepted head>
+scope: <bounded target>
+acceptance/invariants: <what was checked>
+risk: routine | sensitive | exceptional
+reviewers: <count and lenses>
+checks: <commands/evidence>
+findings: <fixed items>
+declines: <item + reason>
+residual_risks: <explicit remainder>
+out_of_scope_issues: <GitHub links, or none>
+```
+
+For a controlled lift, add the `kind`, `merge_sha`, and optional `source_sha`
+fields required by `delivery-methodology` after the delta enters the lift. Store
+the receipt in the Project Root/ledger and post one concise review-batch comment,
+not one comment per reviewer or round.
 
 ## Repo config
 
-`review-loop` itself is repo-agnostic. Read **`AGENTS.md` (else `CLAUDE.md`)**
-and the `docs/TESTING.md` it links. Use focused checks during this convergence
-loop; leave the complete affected lane to final candidate certification. If the
-config is absent, infer suitable checks from `package.json` / `Makefile` / CI.
+Read `AGENTS.md` (else `CLAUDE.md`) and linked delivery/testing docs. Use focused
+checks during review convergence; leave the complete affected lane to a direct
+candidate or frozen lift promotion unless a sensitive slice warrants more.
 
-## Relationship to `code-review`
+## Relationship to official review
 
-- **`review-loop`** (this skill): many independent reviewers, **looped to
-  convergence**, run **locally and in-flight** (on a plan or an unpushed diff).
-- **`code-review`**: one official, posted review on an open PR. `ship` runs that
-  (or Codex's `codex review`) as the single pre-merge gate.
-
-They compose: `review-loop` keeps the work clean as you build; the official
-review confirms it at the PR.
+`review-loop` certifies bounded in-flight deltas. `ship` runs one official review
+for a direct candidate or final promotion. A lift promotion consumes prior
+receipts and focuses on coverage/composition/uncovered delta instead of blindly
+re-reviewing every slice.

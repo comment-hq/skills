@@ -29,12 +29,13 @@ claude plugin marketplace add comment-hq/skills
 |---|---|
 | `comment-dev` | Front door — describe the work, it routes to the right path below |
 | `comment-spec` | Shape a rough idea into a crisp spec, then hand off to build |
-| `comment-feature` | Build a defined feature end-to-end → merge-ready PR |
+| `delivery-methodology` | Choose direct vs controlled-lift delivery; bounded review receipts and promotion |
+| `comment-feature` | Build a defined feature through bounded deltas → technically ready PR |
 | `comment-bug` | Reproduce → failing test → fix → verify → PR |
 | `comment-prototype` | Fast "let me see it first" change; skips the gate, promote later |
-| `drive-plan` | The phased-plan execution engine the delivery skills run on |
-| `review-loop` | A panel of independent reviewers looped until clean (in-flight gate) |
-| `ship` | Take a branch to merge-ready: review gate → green → PR |
+| `drive-plan` | Execute phases to acceptance; review only at delivery/risk boundaries |
+| `review-loop` | Risk-scaled SHA-delta review with a durable receipt |
+| `ship` | Certify and move a direct candidate, lift slice, or lift promotion |
 | `worklog` | The live working-memory comm — plan, status, decisions, open questions |
 | `steer` | Keep a human in the loop; escalate decisions that shouldn't be made alone |
 | `comment-identity` | Give the session a named, attributable Comment.io handle |
@@ -62,9 +63,9 @@ claude plugin marketplace add comment-hq/skills
 ## How the skills learn your repo
 
 The skills are repo-agnostic. They read your repo's `AGENTS.md` (or `CLAUDE.md`)
-and the `docs/TESTING.md` it links for focused convergence checks and final
-candidate certification. Don't have those? Run `comment-init` and it scaffolds
-them.
+and linked delivery/testing docs for direct-vs-lift topology, focused
+convergence, review receipts, and final candidate certification. Don't have
+those? Run `comment-init` and it scaffolds them.
 
 ## License
 

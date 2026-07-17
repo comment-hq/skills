@@ -1,89 +1,77 @@
 ---
 name: code-review
-description: Run a multi-agent code review on a pull request and post the result. Only invoke when explicitly requested as `$code-review` or `/code-review`.
+description: Run one evidence-focused, risk-scaled official code review on a pull request and post the result. Only invoke when explicitly requested as `$code-review` or `/code-review`, or when `ship` selects it as the sole official-review fallback.
 ---
 
-Provide a code review for the given pull request.
+# code-review — one official review for the exact PR head
 
-This is the single official, posted PR review — distinct from `review-loop`, which loops an independent reviewer panel in-flight (before the PR is opened) until clean.
+This is the posted official review path. It is distinct from `review-loop`,
+which certifies bounded in-flight deltas. Do not run both local Codex review and
+this skill for the same candidate.
 
-To do this, follow these steps precisely:
+## Eligibility
 
-1. Use a Haiku agent to check if the pull request (a) is closed, (b) is a draft, (c) does not need a code review (eg. because it is an automated pull request, or is very simple and obviously ok), or (d) already has a code review from you from earlier. If so, do not proceed.
-2. Use another Haiku agent to give you a list of file paths to (but not the contents of) any relevant CLAUDE.md files from the codebase: the root CLAUDE.md file (if one exists), as well as any CLAUDE.md files in the directories whose files the pull request modified
-3. Use a Haiku agent to view the pull request, and ask the agent to return a summary of the change
-4. Then, launch 5 parallel Sonnet agents to independently code review the change. The agents should do the following, then return a list of issues and the reason each issue was flagged (eg. CLAUDE.md adherence, bug, historical git context, etc.):
-   a. Agent #1: Audit the changes to make sure they compily with the CLAUDE.md. Note that CLAUDE.md is guidance for Claude as it writes code, so not all instructions will be applicable during code review.
-   b. Agent #2: Read the file changes in the pull request, then do a shallow scan for obvious bugs. Avoid reading extra context beyond the changes, focusing just on the changes themselves. Focus on large bugs, and avoid small issues and nitpicks. Ignore likely false positives.
-   c. Agent #3: Read the git blame and history of the code modified, to identify any bugs in light of that historical context
-   d. Agent #4: Read previous pull requests that touched these files, and check for any comments on those pull requests that may also apply to the current pull request.
-   e. Agent #5: Read code comments in the modified files, and make sure the changes in the pull request comply with any guidance in the comments.
-5. For each issue found in #4, launch a parallel Haiku agent that takes the PR, issue description, and list of CLAUDE.md files (from step 2), and returns a score to indicate the agent's level of confidence for whether the issue is real or false positive. To do that, the agent should score each issue on a scale from 0-100, indicating its level of confidence. For issues that were flagged due to CLAUDE.md instructions, the agent should double check that the CLAUDE.md actually calls out that issue specifically. The scale is (give this rubric to the agent verbatim):
-   a. 0: Not confident at all. This is a false positive that doesn't stand up to light scrutiny, or is a pre-existing issue.
-   b. 25: Somewhat confident. This might be a real issue, but may also be a false positive. The agent wasn't able to verify that it's a real issue. If the issue is stylistic, it is one that was not explicitly called out in the relevant CLAUDE.md.
-   c. 50: Moderately confident. The agent was able to verify this is a real issue, but it might be a nitpick or not happen very often in practice. Relative to the rest of the PR, it's not very important.
-   d. 75: Highly confident. The agent double checked the issue, and verified that it is very likely it is a real issue that will be hit in practice. The existing approach in the PR is insufficient. The issue is very important and will directly impact the code's functionality, or it is an issue that is directly mentioned in the relevant CLAUDE.md.
-   e. 100: Absolutely certain. The agent double checked the issue, and confirmed that it is definitely a real issue, that will happen frequently in practice. The evidence directly confirms this.
-6. Filter out any issues with a score less than 80. If there are no issues that meet this criteria, do not proceed.
-7. Use a Haiku agent to repeat the eligibility check from #1, to make sure that the pull request is still eligible for code review.
-8. Finally, use the gh bash command to comment back on the pull request with the result. When writing your comment, keep in mind to:
-   a. Keep your output brief
-   b. Avoid emojis
-   c. Link and cite relevant code, files, and URLs
+Read the PR's state, base, exact head SHA, changed files, relevant
+`AGENTS.md`/`CLAUDE.md`, and prior reviews. Stop for a closed/draft PR unless
+`ship` deliberately opened a draft because this is the only available official
+reviewer. Do not skip merely because an earlier head was reviewed: official
+evidence must match the current head.
 
-Examples of false positives, for steps 4 and 5:
+## Risk-scaled review
 
-- Pre-existing issues
-- Something that looks like a bug but is not actually a bug
-- Pedantic nitpicks that a senior engineer wouldn't call out
-- Issues that a linter, typechecker, or compiler would catch (eg. missing or incorrect imports, type errors, broken tests, formatting issues, pedantic style issues like newlines). No need to run these build steps yourself -- it is safe to assume that they will be run separately as part of CI.
-- General code quality issues (eg. lack of test coverage, general security issues, poor documentation), unless explicitly required in CLAUDE.md
-- Issues that are called out in CLAUDE.md, but explicitly silenced in the code (eg. due to a lint ignore comment)
-- Changes in functionality that are likely intentional or are directly related to the broader change
-- Real issues, but on lines that the user did not modify in their pull request
+Use one strong primary reviewer for correctness, regressions, missed
+requirements, and repository-instruction violations. Add one independent
+specialist lens only when the diff touches authorization/security,
+migrations/storage, protocol/compatibility, concurrency, native code,
+destructive behavior, or credible data-loss risk. Three reviewers are reserved
+for exceptional blast radius.
 
-Notes:
+Lock the review to the PR's declared subject, acceptance criteria, invariants,
+and exact base/head delta. Read only the surrounding code and history needed to
+verify impact; untouched context is evidence, not a broader audit surface. A
+finding is in scope only if the PR delta introduced or changed it, or the delta
+makes an existing path violate an explicit requirement/invariant. For a lift promotion, consume the review
+receipt ledger and focus on receipt coverage, cross-slice composition,
+main-sync/conflict delta, migration/cut-over ordering, and uncovered commits
+instead of blindly repeating each certified slice.
 
-- Do not check build signal or attempt to build or typecheck the app. These will run separately, and are not relevant to your code review.
-- Use `gh` to interact with Github (eg. to fetch a pull request, or to create inline comments), rather than web fetch
-- Make a todo list first
-- You must cite and link each bug (eg. if referring to a CLAUDE.md, you must link it)
-- For your final comment, follow the following format precisely (assuming for this example that you found 3 issues):
+## Findings
 
----
+Keep an issue only when evidence demonstrates a concrete correctness,
+security/privacy, data-loss, compatibility, migration, protocol, or stated-
+requirement failure on changed code. Verify debatable claims from code or a
+focused case. Exclude:
 
-### Code review
+- style or preference;
+- speculative refactors/general quality advice;
+- unrelated pre-existing debt;
+- unsupported hypotheticals;
+- compiler/linter/type errors already covered by a required gate, unless the
+  review shows that gate is missing;
+- intentional behavior required by the task.
 
-Found 3 issues:
+Prefer the simplest implementation that works for the current user need. Do not
+block shipping on speculative enterprise hardening, abstraction, or unlikely
+edge cases without a credible reachable failure. This does not relax concrete
+security/privacy, data-loss, migration, protocol, or correctness requirements.
 
-1. <brief description of bug> (CLAUDE.md says "<...>")
+Report a genuinely unrelated defect separately as an out-of-scope discovery;
+do not put it in the PR review or expand the current diff. The orchestrating
+agent searches for or files one focused GitHub issue and continues. If it is
+actively release-breaking or makes the current delivery unsafe, the orchestrator
+stops and asks the owner human to start a separate worktree job.
 
-<link to file and line with full sha1 + line range for context, note that you MUST provide the full sha and not use bash here, eg. https://github.com/anthropics/claude-code/blob/1d54823877c4de72b2316a64032a54afc404e619/README.md#L13-L17>
+The main agent deduplicates and verifies the complete finding batch. Post one
+brief official review for the exact head SHA, citing each real issue. If none
+remain, post “No actionable issues found” and name the scope/lenses reviewed.
+Never ask a second panel to sample until silence.
 
-2. <brief description of bug> (some/other/CLAUDE.md says "<...>")
+## After a fix
 
-<link to file and line with full sha1 + line range for context>
+The edited PR is a new head. Review only the fix delta plus impacted invariants
+when the platform supports it, but make the posted result explicitly apply to
+the new exact head. Normal work gets at most two finding-bearing rounds before
+redesign, targeted proof, residual-risk recording, or human escalation.
 
-3. <brief description of bug> (bug due to <file and code snippet>)
-
-<link to file and line with full sha1 + line range for context>
-
-<sub>- If this code review was useful, please react with 👍. Otherwise, react with 👎.</sub>
-
----
-
-- Or, if you found no issues:
-
----
-
-### Code review
-
-No issues found. Checked for bugs and CLAUDE.md compliance.
-
-- When linking to code, follow the following format precisely, otherwise the Markdown preview won't render correctly: https://github.com/anthropics/claude-cli-internal/blob/c21d3c10bc8e898b7ac1a2d745bdc9bc4e423afe/package.json#L10-L15
-  - Requires full git sha
-  - You must provide the full sha. Commands like `https://github.com/owner/repo/blob/$(git rev-parse HEAD)/foo/bar` will not work, since your comment will be directly rendered in Markdown.
-  - Repo name must match the repo you're code reviewing
-  - # sign after the file name
-  - Line range format is L[start]-L[end]
-  - Provide at least 1 line of context before and after, centered on the line you are commenting about (eg. if you are commenting about lines 5-6, you should link to `L4-7`)
+Do not run builds or full tests inside this skill; `ship` owns candidate
+evidence. Use `gh` for PR inspection and posting.

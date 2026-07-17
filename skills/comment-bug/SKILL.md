@@ -12,7 +12,7 @@ description: >-
 
 # comment-bug — bug fix through a comm
 
-Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog records the **repro**, the **root cause**, the **fix**, and the **verification evidence** as durable content. Composes **`worklog`**, **`steer`**, **`review-loop`**, and **`ship`** — all sibling skills in this bundle. (A bug fix is usually linear, so it doesn't delegate to `drive-plan`; reach for `drive-plan` only if the fix is genuinely multi-phase.)
+Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog records the **repro**, the **root cause**, the **fix**, and the **verification evidence** as durable content. Composes **`delivery-methodology`**, **`worklog`**, **`steer`**, **`review-loop`**, and **`ship`** — all sibling skills in this bundle. A bug fix is usually direct and linear; use a controlled lift only when the real fix is a foundational replacement with unsafe intermediate states.
 
 > A **`comment-prototype`** can promote INTO `comment-bug` (reusing its worklog/branch), which then adds the failing regression test a prototype skips. Reachable via the **`comment-dev`** front-door router.
 
@@ -24,25 +24,50 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
 
 ## Preconditions
 
-- Task worktree on a `bug/...` branch off fresh `origin/main` (never on `main`).
+- Task worktree on a `bug/...` branch off fresh `origin/main`, or a declared
+  `lift/...` when `delivery-methodology` requires it (never on `main`).
 
 ## Workflow
 
 1. **Open or inherit the Project Root.** If no Project Root URL was supplied, open the worklog (`worklog`) with the bug-shaped body and treat it as the Project Root; update its own `Project Root: URL` line after creation. If a Project Root URL was supplied, open the bug worklog as a child with that `Project Root: URL` near the top and link it from the root. **Promotion from `comment-prototype`:** if you were handed a prototype's human-openable worklog URL (`share_url` for direct REST) and branch, reuse *that* worklog as the Project Root — upgrade its light note in place to the bug-shaped body (don't open a second) — and continue on its branch. Record the symptom and exact reproduction steps first.
-2. **Reproduce** the failure deterministically. If you cannot reproduce, say so in the worklog and `steer` to the reporter for details — do not guess a fix.
-3. **Write a regression test that FAILS on the current code** — this proves you've captured the bug. Record the failing output as a comment.
+2. **Choose topology and reproduce.** Read `delivery-methodology`; default to a
+   direct bug branch unless the correct fix is foundational and partially
+   unshippable. Reproduce the failure deterministically when possible. If the
+   report lacks required detail, `steer`; do not guess a fix.
+3. **Capture before/after proof.** Prefer a regression test that fails on the
+   current code. When an automated harness is unavailable or disproportionate
+   (for example an external/flaky integration), record a deterministic manual
+   or diagnostic repro and explain why an automated regression was not
+   practical. Do not spend days building unrelated harness infrastructure.
 4. **Diagnose** the root cause; record it in the body with the evidence (logs, traces, the offending code path).
-5. **Steer checkpoint** — before committing to a non-obvious fix strategy, run **`steer`**: check for human comments, and escalate the chosen approach if it's risky or ambiguous.
+5. **Steer only on a real decision** — check before an irreversible, risky, or
+   materially ambiguous fix strategy; otherwise keep moving.
 6. **Fix** minimally and at the right layer. The regression test must now pass.
+   Prefer the simplest fix for the reproduced user failure; do not generalize
+   into speculative enterprise hardening or imagined edge cases without a
+   credible failure path.
    Use focused checks while the fix and review converge; `ship` runs the complete
    affected lane on the final committed candidate.
-7. **Review the fix** by explicitly invoking **`$review-loop`** (it runs only on explicit request — this step *is* that request; rounds as comments); fix real findings; re-run until clean. Do this *before* the real-scenario verification so the evidence reflects the final code.
-8. **Verify the real scenario** — on the final post-review-loop code, confirm the original symptom is gone, on the branch preview where applicable (the repo's convention for a per-worktree staging deploy, e.g. `https://<worktree>.toofs.us` here — see the guide; skip if unavailable in your runtime). Capture evidence (screenshot/log) as a comment.
+7. **Review the explicit delta** with `review-loop`: one reviewer normally, a
+   second sensitive-risk lens when warranted, and at most two finding-bearing
+   rounds before redesign/proof/escalation. Record one receipt and one batch
+   summary, not a comment per reviewer.
+8. **Verify the real scenario when material** — confirm the original symptom is
+   gone on the final code. Use a branch preview for user-visible/integration
+   behavior when available; a focused deterministic proof is enough for a
+   narrow internal fix.
 9. **Ship** with `ship` (pass it the human-openable worklog URL and Project Root URL when distinct).
+
+Keep diagnosis and review locked to the reproduced defect. Genuinely unrelated
+bugs use `delivery-methodology`'s issue-and-continue protocol; only an actively
+release-breaking or safety-critical discovery stops the job for an owner-created
+separate worktree.
 
 ## Definition of done
 
-- Regression test fails pre-fix, passes post-fix (both recorded).
+- Automated regression test fails pre-fix and passes post-fix when practical;
+  otherwise deterministic before/after evidence and the harness exception are
+  recorded.
 - The original user-visible symptom is verified gone, not just the test green.
 - Worklog body carries repro → root cause → fix; comments carry the failing/passing evidence and review-loop rounds.
 
@@ -52,7 +77,7 @@ Repro, root cause, fix, verification conclusion → worklog **body**. Failing/pa
 
 ## Repo config
 
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for focused iteration checks and final candidate certification, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer suitable lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
+This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and linked delivery/testing docs for topology, focused iteration, final certification, PR/merge, and preview norms. If absent, infer suitable lanes from `package.json` / `Makefile` / CI and offer **`comment-init`**.
 
 ## Comment.io API
 

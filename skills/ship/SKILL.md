@@ -1,84 +1,127 @@
 ---
 name: ship
 description: >-
-  Drive a pull request to merge-ready — running exactly one official code review
-  (auto-detected: prefer Codex, fall back to Claude Code), confirming CI, review,
-  and approval. **Stops at merge-ready by default**; only enqueues into the merge
-  queue, watches the merge, and cleans up the worktree when the user EXPLICITLY
-  asks to land/queue/merge. Posts each state transition to the task's worklog comm
-  when one is provided. Replaces the retired pristine + land — the single
-  PR-lifecycle skill. Invoke as `$ship` / `/ship`, or when asked to finish, land,
-  merge, make a PR mergeable, or "make it pristine". Works identically under Codex
-  and Claude Code.
+  Drive a direct candidate, lift slice, or lift promotion through the right
+  evidence and PR lifecycle. Runs exactly one official review for a direct/final
+  candidate, consumes delta receipts for lift promotion, distinguishes technical
+  readiness from human merge authority, and only queues/watches a merge when
+  explicitly authorized. Invoke as `$ship` / `/ship`, or when asked to finish,
+  land, merge, make a PR mergeable, or make it pristine. Works identically under
+  Codex and Claude Code.
 ---
 
-# ship — one PR lifecycle, runtime-generic
+# ship — certify and move the intended delivery boundary
 
-`ship` takes a delivered branch to merge-ready and, only when explicitly asked,
-through merge and cleanup. It reports each transition to the task's **worklog**
-comm when one exists.
+Read `delivery-methodology`, the repo's `AGENTS.md`/`CLAUDE.md`, and linked
+delivery/testing/merge docs first. Determine the actual PR base and choose one
+mode before running gates.
 
-## The smart review gate (exactly one)
+## Modes
 
-Run **one** official code review, auto-detecting the runtime — prefer local
-`codex review`, otherwise use Claude Code's PR-based `code-review`; never run
-both. If neither is available, stop rather than treating the missing gate as a
-pass.
+### Direct candidate
 
-Run the gate, then **act on it** — never treat a missing, partial, or unknown
-review result as a pass. `ship` runs one official review path for each candidate,
-not redundant reviewers.
+A complete independently shippable task branch targeting the release branch.
+Freeze one commit, run the complete affected lane and one official review on
+that SHA, then push/open the PR.
 
-## Preconditions
+### Lift slice
 
-The **worklog is optional**. When a caller (`comment-feature` / `comment-bug`) passes a human-openable worklog URL (`share_url` for direct REST), post status to it. When a Project Root URL is also passed, preserve it: detailed PR lifecycle notes go to the worklog, while the root gets only concise state changes, blockers, and the PR link. For a standalone `$ship` on an existing PR with no worklog, skip the comm updates and just report status in the PR and terminal — never block the lifecycle on a missing worklog.
+A bounded delta targeting a declared controlled lift. Require focused checks and
+a base/head review receipt. Push/open the slice PR and merge it into the lift
+with a real merge commit when the human-approved lift plan authorizes internal
+slice merges. It does not enter the release merge queue or rerun the cumulative
+main-based affected lane by default.
 
-**Identity for worklog updates.** If a caller passed a worklog/root, keep that route's identity or supplied comm token for every status comment/edit. Do not choose a registered profile just because one exists locally, and never switch to a Botlets bot profile for a coding-session worklog. If `$ship` is used standalone, choose the first working Comment.io route; invoke `comment-identity` only immediately before an uncredentialed direct-REST write.
+### Lift promotion
 
-## Merge is opt-in — default is "merge-ready", not "merged"
+The frozen lift targeting the release branch. Require: no open dependent slice;
+current release base merged into the lift; conflict/uncovered delta receipted;
+ordered receipt coverage verified; complete affected lane plus required
+integration/migration evidence on the frozen SHA; and one composition-oriented
+official review.
 
-`ship` drives to **merge-ready and stops there** by default. Only proceed to enqueue/merge (step 6) when the user **explicitly** asked to merge/land/queue this PR. A request to "make a PR", "open a PR", or "make it mergeable/pristine" is **not** a merge request — leave merging to the human (per CLAUDE.md). When in doubt, stop at step 5 (PR-state verified) and report the PR as ready.
+## Exactly one official review path
+
+For a direct candidate or lift promotion, prefer local `codex review`; otherwise
+use the runtime's PR-based `code-review`, never both. Run the affected lane and
+local official review concurrently when practical. Unknown/partial results are
+not passes.
+
+A PR-based-only reviewer may require opening a draft after test certification.
+Keep it draft until that same SHA passes review. A finding or edit returns only
+the affected delta to convergence and creates a new final candidate; valid
+unrelated lift receipts remain valid.
+
+## Worklog and identity
+
+The worklog is optional for standalone use. When a caller supplies a worklog or
+Project Root, keep its route identity/token and update only material transitions:
+mode/frozen SHA, receipt, technically ready, blocker, queued, and merged. Never
+switch to an ambient registered or Botlets profile. Invoke `comment-identity`
+only immediately before an uncredentialed direct-REST write.
 
 ## Workflow
 
-1. **Converge locally:** finish implementation and any in-flight review loop,
-   batching compatible findings and using focused checks. For high-risk work,
-   briefly record the invariants, risks, and evidence needed.
-2. **Freeze the candidate:** commit the intended state and record its SHA. The
-   worktree must be clean.
-3. **Certify that exact commit:** resolve the intended PR base, using the existing
-   PR's actual base when one exists. Run the complete affected lane and, when the
-   chosen official reviewer is local, review against that base. Wait for the
-   entire requested batch. Any actionable finding, unknown result, or edit
-   invalidates the candidate; record the reasoning for findings you decline.
-4. **Push the exact candidate:** use a normal explicit-SHA refspec so a
-   non-fast-forward update fails. Reserve `--force-with-lease` for an intentional,
-   verified history rewrite. Verify the remote head, then create the PR if none
-   exists or update the existing one. If the chosen official reviewer is
-   PR-based, run it immediately;
-   that SHA is only test-certified until the review is clean. Review findings
-   return the work to local convergence and produce a new candidate.
-5. **Merge-ready loop (the "pristine" gate — default stopping point).** Loop until every criterion holds; report "merge-ready" when it does (don't merge unless explicitly asked). Re-confirm CI **and** mergeability at the moment you exit — both can drift while you wait.
-   - **CI**: required jobs for the current head must all be passing or explicitly skipped. Pending or unknown is blocking. If a check fails, gather the full failure batch before editing, return to local convergence, and certify one new candidate.
-   - **Automated review**: use it only when it is the chosen official review path or a repository-required signal. Accept results only for the exact current head; do not request redundant reviewers or perform repeated blind waits.
-   - **Review threads**: gather the current batch, address compatible findings together, then return to candidate certification before the next push. Reply or record concise reasoning for declined findings.
-   - **Approval (👍) gate**: the PR is merge-ready only when an **external** `+1` reaction is on the PR conversation, **fresh** relative to the current head (Codex's automated 👍 — emitted when its review finds nothing — counts; exclude the login you run as; **never add the reaction yourself**). If absent, enter a **persistent wait** watching all four signals at once until one fires: a fresh external `+1`; new review/comment activity (handle it, then re-loop — late reviews happen); mergeability turned `DIRTY`; or a previously-green required check regressed. Don't time-bound this wait.
-6. **Enqueue (only if merge was explicitly requested)**: **re-read the PR's base now that the PR exists** (`BASE_BRANCH="$(gh pr view <n> --json baseRefName --jq .baseRefName)"`) — the value from the gate may be the `echo main` fallback computed before the PR existed. Confirm the remote head matches your reviewed local commit, then merge per the repo's merge norms (see **Repo config**, the guide) — here, via the merge queue with a real merge commit: `gh pr merge <n> --merge` (**never** `--squash`). On merge-queue mains where `--merge` is rejected, enqueue via the `enqueuePullRequest` GraphQL mutation. Then **watch**: poll until actually merged; verify against the PR's **actual base** (`$BASE_BRANCH` from the gate — not hard-coded `main`, since a stacked or `main`→`production` promotion PR has a different base): `git fetch origin "$BASE_BRANCH"` first (gh polling doesn't refresh the local ref), then re-confirm it landed (`git merge-base --is-ancestor <sha> origin/$BASE_BRANCH`) — a "MERGED" PR stacked on another branch may not have reached its base.
-7. **Clean up (post-merge only)**: if local dev servers are running (and not in Codex Cloud / a no-server environment), stop them with the repo's dev-stop norm (see **Repo config**, the guide — here, `make dev-stop`); delete the task worktree.
-8. **Report**: post the final state (merge-ready, or merged + cleaned up) to the worklog. If a Project Root exists, update its link/status summary and end the final handoff with `Project Root: URL`.
+1. **Converge locally.** Finish the bounded implementation/review batch and
+   focused checks. Record invariants and residual risk.
+2. **Freeze.** Commit intended state, require a clean worktree, and record SHA,
+   intended base, and mode.
+3. **Certify the mode:**
+   - lift slice → focused evidence + accepted delta receipt;
+   - direct → complete affected lane + one official candidate review;
+   - promotion → receipt-chain verification + complete affected/integration
+     evidence + one official composition review.
+4. **Push the exact SHA.** Use a normal explicit-SHA refspec; reserve
+   `--force-with-lease` for an intentional verified rewrite (never rewrite a
+   controlled lift). Verify remote head, then create/update the PR. Use a draft
+   only for the PR-based-review exception above.
+5. **Report technical readiness.** Re-confirm the current head, required PR
+   checks, mergeability, and unresolved review threads. PR-event jobs that skip
+   are not evidence; rely on the local certification. Address one complete late
+   in-scope finding batch, then recertify the affected candidate. An unrelated
+   discovery becomes a focused GitHub issue and does not expand this PR; stop
+   only if it makes the candidate unsafe, then ask the owner human for a
+   separate worktree job.
+6. **Do not wait indefinitely for an external reaction.** If repository rules or
+   the human require approval and it is absent, report “technically ready,
+   awaiting approval” and end/resume on an actual event. Never manufacture a
+   reaction or keep the session alive without a real monitor.
+7. **Merge only with authority:**
+   - lift slice → merge sequentially into its lift with a real merge commit when
+     the approved lift plan authorizes it; record merge SHA in the receipt;
+   - direct/promotion → only when the user explicitly asked to merge/land/queue,
+     enqueue through the repository's release-branch mechanism with a real merge
+     commit and watch until actually merged.
+8. **Verify ancestry.** Fetch the actual base and prove the reviewed/frozen SHA
+   landed. After promotion, prove every recorded slice head and frozen lift head
+   are ancestors of the release branch. Clean up only after verification.
+
+## Technical-ready criteria
+
+- Remote head equals the certified local SHA.
+- Required evidence for the chosen mode is current.
+- Required PR checks are passing/skipped as designed and mergeability is not
+  dirty.
+- No known actionable blocker or unresolved required thread remains.
+- Residual risks/declines are recorded.
+
+Technical readiness is distinct from human merge authority and actual merge.
 
 ## Guardrails
 
-- **Leave merging to a human unless they explicitly asked to merge/land/queue.** Default to stopping at merge-ready (step 5, after PR-state is verified). An implementation/"make a PR" request never implies consent to merge.
-- Never push to remote `main` directly; never squash-merge; never deploy to production without explicit human go-ahead.
-- If the user said "don't push a PR" or "no PR", stop after local validation + the review gate and report — do not open, push, or merge anything.
+- Never push directly to the release branch, squash-merge, or deploy production
+  without explicit authority.
+- If the user said no push/PR, stop after local evidence and report.
+- Preserve stricter domain gates for production deployment, incidents,
+  migrations, or protocol cut-over when they protect irreversible risk.
+- Do not delay a user-useful candidate for speculative enterprise hardening,
+  abstraction, or unsupported edge cases. Ship the simplest boundary that
+  satisfies acceptance and hard invariants.
 
 ## Repo config
 
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for focused iteration checks and final affected-candidate certification, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer suitable lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
+Run this repo's commands. Read **`AGENTS.md` (else `CLAUDE.md`)** and linked delivery/testing/merge/deploy docs. If absent, infer focused and final lanes from package/build/CI config and offer `comment-init`.
 
 ## Comment.io API
 
 Use the active worklog/root and its working Comment.io route first. Resolve and freeze `$BASE` for the whole workflow in this order: the supplied comm's validated final Comment.io origin after any shortlink redirect; the active Comment.io tool/account base URL; an explicitly selected profile's `base_url`; only when no target context exists, `https://comment.io`. A shortlink origin is never `$BASE`; do not switch a staging/custom workflow to production. For direct REST, consult **`$BASE/llms/reference.txt`** only when exact API or recovery detail is needed. Fetch **`$BASE/llms.txt`** only when no current route works or another focused guide is needed. Invoke `comment-identity` only before an uncredentialed direct-REST write; never replace a supplied token or tool/browser/connector identity. Don't restate the live contracts here.
-
-**Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.

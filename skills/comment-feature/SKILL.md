@@ -1,68 +1,109 @@
 ---
 name: comment-feature
 description: >-
-  Deliver a feature end-to-end through a live Comment.io worklog comm — plan,
-  request review points, design, review-loop the plan, implement while listening
-  for human steering, and drive to a merge-ready PR. Outputs a merge-ready PR plus
-  a decision history, a non-technical feature design, and (for architecture-level
-  changes) a proposed architecture decision record, all as comms. Invoke explicitly as `$comment-feature` / `/comment-feature`,
-  or when asked to build/add/implement a feature with a watchable, steerable record.
-  Replaces the retired feat + feature-dev. Works identically under Codex and Claude Code.
+  Deliver a defined feature pragmatically through a live Comment.io worklog:
+  choose a direct PR or controlled lift, implement bounded deltas, use
+  risk-scaled review receipts, validate the right boundary, and drive the result
+  to a technically ready PR. Invoke as `$comment-feature` / `/comment-feature`,
+  or when asked to build/add/implement a feature with a watchable, steerable
+  record. Works identically under Codex and Claude Code.
 ---
 
-# comment-feature — feature delivery through a comm
+# comment-feature — bounded feature delivery through a comm
 
-Full feature delivery whose **working memory, decision history, and human-steering channel all live in one worklog comm**. Replaces the retired `feat` + `feature-dev`; harness-generic (Codex or Claude Code).
+Use this for a feature whose goal and acceptance are defined. Use
+`comment-spec` when a material goal or product fork still needs shaping; use
+`comment-prototype` when the human wants to see an exploratory change first.
 
-> For an **un-shaped idea** — where the goal, scope, or product fit isn't settled yet — start with **`/comment-spec`** first. It shapes the idea into a crisp PM spec (clear goal, fits the app, fewest new concepts, a measurement plan) and then invokes this skill with that spec. Use `comment-feature` directly when the feature is already well-defined.
+This skill composes `delivery-methodology`, `worklog`, `drive-plan`,
+`review-loop`, `steer`, and `ship`. Before using one, read its full `SKILL.md`
+(its `SKILL.md`).
 
-> For a quick **"let me see it first"** change, start with **`/comment-prototype`** — implement fast and show it, skipping the review-loop + PR gate; later promote it *into* this skill, reusing the same worklog/branch.
+## Project Root and identity
 
-**Project Root.** Direct `comment-feature` uses its worklog as the Project Root. If invoked from `comment-spec` with a Spec comm / Project Root URL, the Spec doc remains the Project Root; create the feature worklog, Plan, design, and ADR docs as children with `Project Root: URL` near the top, and link them from the Spec root. Do not create a second root.
+Direct feature work uses its worklog as Project Root. When a Spec or existing
+Project Root URL is supplied, preserve it and make the worklog a child. A
+prototype promotion reuses and upgrades the existing worklog/branch.
 
-Composes the primitives, engine, and gates: **`worklog`** (the comm), **`steer`** (human-in-the-loop), **`drive-plan`** (the phased execution engine that does the actual end-to-end build), **`review-loop`** (review gate), **`ship`** (PR lifecycle), and **`comment-init`** (architecture refresh). All are sibling skills in this bundle; this skill is also reachable via the **`comment-dev`** front door.
-
-**Before using a composed skill, read its full `SKILL.md`** — naming a skill here does not auto-load its contract, and the sub-skills carry mandatory rules (`drive-plan`'s phase loop, the `ship` review/PR gate, `worklog` update rules, `comment-init` idempotency) you must follow.
-
-## Preconditions
-
-- Work in a task worktree on a feature branch (this repo's convention is a `feat/...` prefix off fresh `origin/main` — see **Repo config** and the guide) — never on `main`. If you're on `main`, create the worktree first.
+Keep the working Comment.io route and identity for every created artifact,
+edit, and comment. Invoke `comment-identity` only immediately before an
+uncredentialed direct-REST write. Never switch to an ambient registered or
+Botlets profile.
 
 ## Workflow
 
-1. **Open or inherit the Project Root.** If a Spec comm / Project Root URL was supplied, keep that Spec doc as root and open the feature worklog (`worklog`) as a child with `Project Root: URL` near the top. Otherwise open the worklog through the first working Comment.io route; only an uncredentialed direct-REST route invokes `comment-identity`. The worklog is the Project Root, so update its own `Project Root: URL` line after creation. **Promotion from `comment-prototype`:** if you were handed a prototype's human-openable worklog URL (`share_url` for direct REST) and branch, reuse *that* worklog as the Project Root — upgrade its light note in place to the full worklog shape (don't open a second) — and keep building on its branch. Keep that route's identity as the **flow identity** for feature-created Plan, design, ADR/proposed-ADR comms, status edits, and comments. If a supplied Project Root/share URL gives only a per-doc token, use that token for the existing root, but do not create new child docs as an ambient registered handle or any Botlets bot profile. For multi-phase work, also create a separate **Plan comm** (phased) as a child and link it from the worklog header; for small features the Plan can live in the worklog body (then drop the header Plan link). Always post a **comment naming the review points** where you'll pause for input, and record those pause points in the Plan checklist. @mention the relevant human only when the active route exposes a valid handle; otherwise make it a general comment, hand the human the worklog URL directly, and never invent a handle.
-2. **Understand**: fan out read-only explorers over the affected code; record findings in the worklog.
-3. **Design**: consider 2–3 approaches; pick one and record it in the **Decision log** with the rejected alternatives. For high-risk work, state the key invariants, risks, and evidence needed. Draft the **non-technical design comm** now (so non-engineers can react before work is sunk), add `Project Root: URL` near the top when a root exists, and link it from the worklog/root; update it after implementation if needed. If a choice is architecture-level, flag it for an ADR (see `comment-init`).
-4. **Review the plan** by explicitly invoking **`$review-loop`** on the plan itself (it runs only on explicit request — this step *is* that request; skip for genuinely trivial changes). Post **each review round as a comment** on the worklog; fix real findings; re-run until clean.
-5. **Execute via `drive-plan`** — hand the plan and Project Root URL (when one exists) to `drive-plan`, the engine that does the actual end-to-end build: it implements each phase, validates locally and on the branch preview, runs `$review-loop` at every phase boundary, keeps the plan in sync, and runs `steer` checkpoints (folding in human @mentions, escalating decisions you shouldn't make alone). Pass the **separate Plan comm** if you made one in step 1; for a small feature whose Plan lives in the worklog body, point `drive-plan` at the worklog's Plan section instead — don't create an extra Plan comm just to satisfy this step. This *is* the "how you build the feature" step.
-6. **Ship** with `ship` (pass it the human-openable worklog URL and Project Root URL when distinct) — push the branch, open the PR, drive to merge-ready through the smart review gate, posting state transitions to the worklog.
-7. **Finalize the outputs** (below) — most are created earlier; confirm they're current and cross-linked.
+1. **Choose topology before editing.** Read `delivery-methodology` plus the
+   repo's `AGENTS.md`/`CLAUDE.md` and linked delivery/testing docs. Record one:
+   - direct task branch for a complete independently shippable change; or
+   - controlled lift for foundational work with unsafe intermediate states.
 
-## Outputs (all linked from the Project Root; direct feature flows also link from the worklog)
+   Feature flags require a clean bounded activation seam. Do not use them to
+   preserve two architectures, dual writes, duplicated state, or broad
+   compatibility scaffolding.
+2. **Open or inherit one worklog.** Put the plan in its body unless a genuinely
+   multi-slice initiative benefits from a separate Plan comm. Post the material
+   review/decision points. @mention the relevant human only when the active route exposes a valid handle;
+   otherwise make it a general comment, hand the human the worklog URL directly,
+   and never invent a handle.
+3. **Understand the affected system.** Use read-only explorers when parallel
+   investigation will reduce uncertainty. Record conclusions, not transcripts.
+   Start from the real user journey and implement the simplest useful behavior
+   that can validate whether users love it. Do not add speculative enterprise
+   hardening, abstraction, or edge-case machinery without evidence or a current
+   requirement.
+4. **Plan bounded delivery slices.** Each has acceptance, explicit base/head
+   intent, invariants, focused evidence, and promotion dependency. Phases may
+   organize work but are not automatic review, staging, or steering gates.
+   Consider alternatives only for a material choice; record the decision and
+   rejected option briefly.
+5. **Review the plan proportionally.** Skip review for an obvious routine plan.
+   Otherwise use one reviewer; add a sensitive-risk lens only when warranted.
+   Do not run fresh panels until silent. An inherited approved Spec is the
+   non-technical design; do not recreate it.
+6. **Execute with `drive-plan`.** Implement one bounded delta at a time, run
+   focused checks, update the worklog at material milestones, and invoke
+   `review-loop` only at a delivery-slice or changed-invariant boundary.
+7. **Record receipts.** A lift worklog keeps the ordered receipt ledger required
+   by `delivery-methodology`. A direct candidate records its final base/head,
+   evidence, findings, declines, and residual risk.
+8. **Ship the right boundary.** Use `ship` in direct, lift-slice, or
+   lift-promotion mode. Direct candidates and frozen promotions get complete
+   affected certification plus one official review; lift slices get focused
+   delta evidence and receipts. Stop at technically ready unless merge authority
+   is explicit; when it is, merge and verify ancestry.
 
-- **Merge-ready PR.**
-- **Decision history** — the worklog's decision log + comment stream.
-- **Non-technical feature design** — a separate comm for non-engineers (problem · who · what changes · rollout · success). Plain language, no internals.
-- **Architecture (default output is a *proposed* ADR)** — for any architecture-level decision, the deliverable at the merge-ready stop is a **proposed ADR**; the living Overview is **not** touched pre-merge (it describes "what is true now"). Refreshing the Overview and accepting the ADR is a **post-merge follow-up** — only if/when the change actually merges, run `comment-init` against updated `main` (it maps the codebase from a fresh checkout, so it does **not** need the task worktree `ship` may have cleaned up).
+## Pragmatic done
+
+The feature boundary is done when acceptance passes, required evidence passes,
+no known severity-blocking defect remains, mandatory repo rules hold, and
+residual risks/follow-ups are recorded. Optional polish and unrelated cleanup
+become follow-ups.
+
+Keep reviews and fixes locked to the declared feature boundary. Unrelated bugs
+follow `delivery-methodology`'s issue-and-continue protocol; never turn this
+feature branch into a surprise cleanup job.
+
+## Outputs
+
+- One current Project Root/worklog with topology, plan, status, decisions,
+  receipts, open questions, and PR links.
+- A technically ready direct PR, lift-slice PR, or final promotion PR.
+- Separate design/Plan/ADR comms only when a real audience or durable
+  architecture decision needs them. A proposed ADR becomes accepted only after
+  the change reaches the release branch.
 
 ## Content vs comments
 
-Plan, status, decisions, summary, open questions → worklog **body**. Every review-loop round, steer, and escalation → **comments** (lists / short lines). Keep the Project Root scannable: no bulky evidence, FYI detail, or review transcripts in the root body.
+Current plan, status, decisions, receipts, summary, and open questions belong in
+the body. Review batches, steering exchanges, and escalations belong in concise
+comments. Do not post one comment per reviewer.
 
 ## Repo config
 
-This skill is repo-agnostic — run *this* repo's commands, not hardcoded ones. Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked **`docs/TESTING.md`** for focused iteration checks and final candidate certification, plus the guide's PR/branch/merge and deploy/preview norms. If `docs/TESTING.md` is absent, infer suitable lanes from `package.json` / `Makefile` / CI and offer **`comment-init`** to scaffold the config.
+Read **`AGENTS.md` (else `CLAUDE.md`)** and its linked delivery/testing docs for
+topology, focused checks, final certification, PR/merge, and preview rules. If
+missing, infer the safe minimum and offer `comment-init`.
 
 ## Comment.io API
 
 Use the current worklog/Project Root and its working Comment.io route first. Resolve and freeze `$BASE` for the whole workflow in this order: the supplied comm's validated final Comment.io origin after any shortlink redirect; the active Comment.io tool/account base URL; an explicitly selected profile's `base_url`; only when no target context exists, `https://comment.io`. A shortlink origin is never `$BASE`; do not switch a staging/custom workflow to production. For direct REST, consult **`$BASE/llms/reference.txt`** only when exact API or recovery detail is needed. Fetch **`$BASE/llms.txt`** only when no current route works or another focused guide is needed. Invoke `comment-identity` only before an uncredentialed direct-REST write; never replace a supplied token or tool/browser/connector identity. Don't restate the live contracts here.
-
-**Content vs comments (team convention).** The *answer* → document **body**; *how you got there* (review-loop rounds, steering, escalations) → **comments**, as lists / short lines.
-
-## Templates
-
-- **Worklog** → see the `worklog` skill.
-- **Plan (phased)** → title + `Project Root: URL` + meta → `## Goal & acceptance` → `## Phase N — <name>` (tasks `- [ ]` + acceptance; review-loop at each boundary as comments) → `## Risks` → `## Related`.
-- **Non-technical design** → title + `Project Root: URL` → `## The problem` → `## Who this is for` → `## What changes` (before/after table) → `## Rollout` → `## How we'll know it worked` → `## Out of scope`.
-
-Follow the skeletons above for each artifact.
