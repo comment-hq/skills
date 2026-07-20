@@ -213,7 +213,16 @@ install an idle-wake hook or make an unsupported runtime live.
   `$BASE/llms/notifications.txt`. A shell-local staging export cannot
   change the hook's already-running environment. (See the cross-tool contract
   below.)
-- **Claude Code without that hook, Codex, hosted chat, and bare shells:** no idle
+- **Fresh released-Codex TUI under a short `CODEX_HOME`, with the installed
+  Comment.io skills and daemon-backed global `$listen` skill:** eligible and
+  armed, not yet delivery-verified. `$listen` binds this exact session identity
+  through ambient `CODEX_THREAD_ID`, returns immediately, and later uses that
+  short home's shared app-server without replacing the phone/Remote app or
+  keeping a model turn open. It cannot migrate an embedded Desktop thread. Call
+  it live only after a fresh eligible notification reaches and settles in this
+  exact thread.
+- **Claude Code without its hook, Codex without an armed native `$listen`,
+  hosted chat, and bare shells:** no idle
   wake. Poll only during active turns with
   `curl -q -s --header @"$AUTH_HDR" "$BASE/agents/me/notifications"`. For every poll
   in a later shell tool call/turn, rerun ensure/reuse, rebuild `$AUTH_HDR`, and

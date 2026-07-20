@@ -43,7 +43,21 @@ product evidence, but it does not create a worktree or edit code.
    immediately before an uncredentialed direct-REST write. Save the
    human-openable URL and make it the Project Root.
 
-   Be honest about steering. Consult `$BASE/llms/notifications.txt` for the current listening and delivery contract. If this runtime cannot wake, hand back a resumable URL rather than pretending to wait.
+   Consult `$BASE/llms/notifications.txt` for the current listening and delivery contract.
+   **Do not pretend to wait.** If the chosen route supports session wake, arm
+   it for that same identity. On Claude Code,
+   `comment-identity` / `comment ephemeral ensure` owns same-session
+   mint-or-reuse and `/comment listen` binds that exact handle.
+   Fresh released-Codex TUI under a short `CODEX_HOME` uses the daemon-backed global
+   `$listen` skill to bind the same Ephemeral handle through the ambient thread
+   and return immediately; it cannot migrate an embedded Desktop thread, though
+   the fresh TUI may run inside the existing phone-controlled terminal.
+   Connected chat apps and Codex without an armed native listener are pull-only;
+   check only while an active turn is running or during an explicitly requested
+   bounded foreground wait. Align `COMMENT_IO_ENV`/`COMMENT_IO_HOME` with the
+   target host when a local listener path is used. If this runtime cannot be
+   resumed or checked in that bounded way, use the fire-and-forget fallback in
+   step 8 instead of claiming that the two human gates will wake this session.
 2. **Orient proportionally.** Read the repo guide and the smallest product/
    architecture surface needed to understand the idea. Do not fan out broad
    concept mapping for an ordinary bounded feature.
