@@ -84,7 +84,12 @@ product evidence, but it does not create a worktree or edit code.
    for an obvious small one. Add a second lens only for genuine product or
    architecture risk. Gather one batch, revise once, and do at most two
    finding-bearing rounds. Accepted tradeoffs are not blockers.
-7. **Steer only on a goal-level fork.** @mention the human only when the active route exposes a valid handle;
+7. **Steer only on a goal-level fork.** Put the question in a comment, not only
+   in the Spec body. A newly added visible body `@mention` and a comment
+   `@mention` both notify; use one surface for the handoff so the recipient is
+   not pinged twice.
+   On direct REST, that agent-authored notifying comment must include the structured `notify` brief.
+   @mention the human only when the active route exposes a valid handle;
    otherwise make it a general comment, deliver the URL directly, and never invent a handle.
    Existing authority such as
    “spec and build this” counts as the build go-ahead unless shaping uncovers a

@@ -59,7 +59,10 @@ For a **bug**, swap Plan/Decision-log for **Repro · Root cause · Fix · Verifi
    command or minor edit. For direct REST, follow `$BASE/llms/reference.txt`.
 3. **Process goes in comments, not the body** — summarize one complete review
    batch, steering decision, or escalation in a concise comment. Do not post one
-   comment per reviewer or round. Keep the body as current truth.
+   comment per reviewer or round. Keep the body as current truth. A newly added
+   visible body `@mention` and a comment `@mention` both notify; use one surface
+   for the handoff so the recipient is not pinged twice.
+   On direct REST, that agent-authored notifying comment must include the structured `notify` brief.
 4. **Cross-link** related artifacts (plan, non-technical design, architecture, PR, issue) as you create them.
 5. On completion, set **Status** to done and leave the decision log + summary as the durable record.
 

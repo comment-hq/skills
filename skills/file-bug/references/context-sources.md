@@ -9,7 +9,7 @@ can find it locally, find it. When only the user has it, ask.
 
 - [Git & environment state](#git--environment-state)
 - [Claude Code session transcripts](#claude-code-session-transcripts)
-- [Structured logs (local + Axiom)](#structured-logs-local--axiom)
+- [Structured logs (local + PostHog)](#structured-logs-local--posthog)
 - [Error codes, stack traces, console output](#error-codes-stack-traces-console-output)
 - [URLs & where it happened](#urls--where-it-happened)
 - [Filepaths & code locations](#filepaths--code-locations)
@@ -66,7 +66,7 @@ grep -l "<error string or symptom>" ~/.claude/projects/-Users-jgordner-Code-mono
 In the issue, **link the transcript path** and, if useful, quote the few relevant lines
 (the failing tool call + its output). Don't paste an entire transcript.
 
-## Structured logs (local + Axiom)
+## Structured logs (local + PostHog)
 
 Both backend and frontend log JSON (`{"ts","level","component","msg","data"}`). See
 `docs/LOGGING.md`.
@@ -78,19 +78,13 @@ make logs          # tail all structured logs (jq)
 make logs-errors   # errors/warnings only
 ```
 
-Axiom (shipped logs) — dataset `comment-docs` (prod) / `comment-docs-staging`. Query for
-the error around the time it happened (token in `.env.local` as `AXIOM_TOKEN`):
-
-```bash
-source .env.local
-curl -q -s -H "Authorization: Bearer $AXIOM_TOKEN" -H "Content-Type: application/json" \
-  -d '{"apl":"[\"comment-docs\"] | where level == \"error\" | take 20","startTime":"<ISO>","endTime":"<ISO>"}' \
-  'https://api.axiom.co/v1/datasets/_apl?format=tabular'
-```
-
-Use bracket quoting for nested fields (`['data.slug']`) and filter `side == "server"` to
-cut OTLP noise. Capture the matching log line(s) or an Axiom query the next person can
-re-run, plus the time window.
+PostHog (shipped logs) — select the environment's exact `POSTHOG_HOST` and
+`POSTHOG_PROJECT_ID`, then use a narrowly scoped `POSTHOG_QUERY_KEY` with the
+current Logs query API. Bound the query to the incident's UTC half-open time
+window and filter structured attributes such as `level`, `side`, `component`,
+`msg`, `request_id`, and `environment`. Follow every result cursor. Capture a
+sanitized matching row, the reproducible query parameters, its PostHog link, and
+the exact time window; never paste query credentials or private document data.
 
 ## Error codes, stack traces, console output
 

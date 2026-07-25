@@ -86,7 +86,8 @@ if u.username or u.password or not host:
 local = host in ("localhost", "127.0.0.1", "::1")
 https_ok = (host == "comment.io" or host == "www.comment.io" or host == "comt.dev" or host.endswith(".comt.dev")
             or host == "toofs.us" or host.endswith(".toofs.us")
-            or host == "truarq.com" or host.endswith(".truarq.com"))  # *.botlets.dev excluded: legacy 301-redirect
+            or host == "truarq.com" or host.endswith(".truarq.com")
+            or host == "muhspace.com" or host.endswith(".muhspace.com"))  # *.botlets.dev excluded: legacy 301-redirect
 if (local and scheme in ("http", "https")) or (scheme == "https" and https_ok):
     netloc = u.netloc.split("@", 1)[-1]   # drop any userinfo (already rejected; defensive)
     print(scheme + "://" + netloc)

@@ -86,7 +86,7 @@ batch your questions into one short message.
 
 Read **[references/context-sources.md](references/context-sources.md)** for the catalog
 of where to find each kind of context (git/env state, Claude Code session transcripts,
-structured logs / Axiom, error codes, URLs, filepaths) and the exact commands.
+structured logs / PostHog, error codes, URLs, filepaths) and the exact commands.
 
 Judgment call: include what materially helps understanding or reproduction; omit noise.
 A great issue has *enough* — exact error string, the URL, the branch+commit, a link to

@@ -41,8 +41,12 @@ Botlets profile.
    preserve two architectures, dual writes, duplicated state, or broad
    compatibility scaffolding.
 2. **Open or inherit one worklog.** Put the plan in its body unless a genuinely
-   multi-slice initiative benefits from a separate Plan comm. Post the material
-   review/decision points. @mention the relevant human only when the active route exposes a valid handle;
+   multi-slice initiative benefits from a separate Plan comm. Post material
+   review/decision points as comments. A newly added visible body `@mention` and
+   a comment `@mention` both notify; use one surface for the handoff so the
+   recipient is not pinged twice.
+   On direct REST, that agent-authored notifying comment must include the structured `notify` brief.
+   @mention the relevant human only when the active route exposes a valid handle;
    otherwise make it a general comment, hand the human the worklog URL directly,
    and never invent a handle.
 3. **Understand the affected system.** Use read-only explorers when parallel

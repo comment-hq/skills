@@ -57,7 +57,10 @@ For each delivery slice or direct candidate:
    `delivery-methodology`; do not absorb them into the slice.
 6. Poll `steer` before an irreversible/materially ambiguous decision, after a
    long autonomous stretch, or at a delivery boundary. Continue when no real
-   decision blocks useful work.
+   decision blocks useful work. Put any human-attention handoff in a comment.
+   A newly added visible body `@mention` and a comment `@mention` both notify;
+   use one surface for the handoff so the recipient is not pinged twice.
+   On direct REST, that agent-authored notifying comment must include the structured `notify` brief.
 7. Mark the boundary complete when acceptance and required evidence pass, no
    known blocker remains, mandatory repo rules hold, and residual risks are
    explicit.

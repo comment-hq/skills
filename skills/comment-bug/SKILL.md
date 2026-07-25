@@ -33,7 +33,11 @@ Same worklog-driven spine as `comment-feature`, shaped for a defect. The worklog
 2. **Choose topology and reproduce.** Read `delivery-methodology`; default to a
    direct bug branch unless the correct fix is foundational and partially
    unshippable. Reproduce the failure deterministically when possible. If the
-   report lacks required detail, `steer`; do not guess a fix.
+   report lacks required detail, `steer`; do not guess a fix. Put any human-
+   attention ask in a comment. A newly added visible body `@mention` and a
+   comment `@mention` both notify; use one surface for the handoff so the
+   recipient is not pinged twice.
+   On direct REST, that agent-authored notifying comment must include the structured `notify` brief.
 3. **Capture before/after proof.** Prefer a regression test that fails on the
    current code. When an automated harness is unavailable or disproportionate
    (for example an external/flaky integration), record a deterministic manual
