@@ -1,13 +1,13 @@
 {
   "name": "comment-io-skills",
   "owner": { "name": "Comment.io", "email": "hello@comment.io" },
-  "metadata": { "description": "Comment.io engineering-workflow skills for any AI coding agent" },
+  "metadata": { "description": "Beads, Comment.io, and pragmatic review for Matt Pocock's skills" },
   "plugins": [
     {
       "name": "comment-workflow",
       "source": "./",
-      "description": "Plan, prototype, build, review, and ship through a live Comment.io worklog — a generic engineering-delivery workflow for any repo",
-      "keywords": ["workflow", "agents", "code-review", "pull-request", "planning", "comment-io"],
+      "description": "Wrap Matt Pocock's skills with Beads tickets, Comment.io artifacts, and pragmatic review judgment",
+      "keywords": ["workflow", "beads", "tickets", "planning", "code-review", "comment-io"],
       "category": "workflow",
       "homepage": "https://comment.io",
       "license": "MIT"

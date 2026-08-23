@@ -1,71 +1,62 @@
-# Comment.io engineering-workflow skills
+# Comment.io overlay for Matt Pocock's skills
 
 [![skills.sh installs](https://skills.sh/b/comment-hq/skills)](https://skills.sh/comment-hq/skills)
 
-A small, opinionated set of [Agent Skills](https://agentskills.io) that give any
-AI coding agent a complete **engineering delivery workflow** — plan, prototype,
-build, review, and ship — with the working memory, decision history, and
-human-steering channel living in a live [Comment.io](https://comment.io) worklog.
+A thin explicit wrapper for
+[mattpocock/skills](https://github.com/mattpocock/skills):
 
-Runtime-generic: the same `SKILL.md` files work in Claude Code, Codex, Cursor,
-Gemini CLI, and any agent that reads the Agent Skills format.
+- tickets live in [Beads](https://github.com/gastownhall/beads), with one epic
+  created when `grill-with-docs` starts;
+- specs, plans, ADRs, research, handoffs, and other non-ticket artifacts live in
+  Comment.io;
+- implementation closes with one risk-scaled review lane; Matt's review replaces
+  the general lane only when a line-addressable spec needs traceability or a
+  non-tool-enforced standards audit is an acceptance concern. Every candidate
+  gets simple, startup-pragmatic judgment before it becomes work.
 
-## Install (one bundle — the skills call each other, so install them together)
+Matt's skills still own the workflow. This overlay is runtime-generic: the same
+skills work in Claude Code, Codex, Cursor, Gemini CLI, and other Agent Skills
+clients.
+
+## Install
+
+Install Matt's skills first, then this overlay:
 
 ```bash
-# Vercel `skills` CLI — installs into whichever agent(s) you have (~70 supported)
+npx skills add mattpocock/skills
 npx skills add comment-hq/skills
-
-# GitHub CLI
-gh skill install comment-hq/skills <skill> --agent claude-code   # or codex / cursor / gemini-cli
-
-# Claude Code plugin marketplace
-claude plugin marketplace add comment-hq/skills
 ```
 
-## The skills
+The order is intentional: this overlay replaces Matt's `code-review` in the
+global skill namespace. Matt's original remains available as
+`mattpocock/skills@code-review`.
 
-| Skill | What it does |
-|---|---|
-| `comment-dev` | Front door — describe the work, it routes to the right path below |
-| `comment-spec` | Shape a rough idea into a crisp spec, then hand off to build |
-| `delivery-methodology` | Choose direct vs controlled-lift delivery; bounded review receipts and promotion |
-| `comment-feature` | Build a defined feature through bounded deltas → technically ready PR |
-| `comment-bug` | Reproduce → failing test → fix → verify → PR |
-| `comment-prototype` | Fast "let me see it first" change; skips the gate, promote later |
-| `drive-plan` | Execute phases to acceptance; review only at delivery/risk boundaries |
-| `review-loop` | Risk-scaled SHA-delta review with a durable receipt |
-| `ship` | Certify and move a direct candidate, lift slice, or lift promotion |
-| `worklog` | The live working-memory comm — plan, status, decisions, open questions |
-| `steer` | Keep a human in the loop; escalate decisions that shouldn't be made alone |
-| `comment-identity` | Give the session a named, attributable Comment.io handle |
-| `comment-init` | Scaffold a repo's test/PR config + architecture docs the skills read |
-| `code-review` | One official, posted review on a PR |
-| `file-bug` | Turn a report into a well-formed GitHub issue |
-| `next` | Write a detailed handoff note for a future session |
+Engineering delivery requires the host repository's authenticated shared Beads
+gateway and a writable Comment.io route. The gateway, backed by a pinned `bd`,
+owns database selection, writer serialization, and remote synchronization;
+agents never call `bd` directly or initialize checkout-local Beads state. If the
+host has no shared gateway, hand the mutation to its coordinator instead of
+creating a second task ledger. If the `comment` skill is installed, the overlay
+invokes it so it can reuse or mint the session identity. It invokes `listen` too
+when that skill and the current runtime support idle mention delivery.
 
-## Requirements
+Invoke `comment-dev` alone to start with `ask-matt`, or supply a target Matt
+skill to run it directly:
 
-- **git** and the **GitHub CLI (`gh`)** for the build/ship paths.
-- **A working Comment.io route for the *worklog* path.** `worklog`, `steer`,
-  `comment-feature`, `comment-bug`, and `comment-spec` use the first route the
-  current environment already has: callable Comment.io tools, a supplied comm
-  token with authenticated HTTPS, or browser access. For a direct REST create
-  with no supplied token or selected identity, `comment-identity` lazily tries
-  a session-scoped Ephemeral handle and degrades to the documented anonymous
-  fallback when unavailable; no installed profile is a prerequisite. Only if
-  you intentionally want a long-lived computer to handle background @mentions,
-  standing agents, or local sync, follow
-  <https://comment.io/llms/setup/full.txt>. The router (`comment-dev`),
-  `comment-prototype`, `review-loop`, `ship`, `code-review`, `file-bug`, and
-  `next` need no Comment.io account at all.
+```text
+# Codex
+$comment-dev
+$comment-dev $grill-with-docs <idea>
+$comment-dev $implement <Beads ticket>
 
-## How the skills learn your repo
+# Claude Code with copied skills
+/comment-dev
+/comment-dev /grill-with-docs <idea>
+/comment-dev /implement <Beads ticket>
+```
 
-The skills are repo-agnostic. They read your repo's `AGENTS.md` (or `CLAUDE.md`)
-and linked delivery/testing docs for direct-vs-lift topology, focused
-convergence, review receipts, and final candidate certification. Don't have
-those? Run `comment-init` and it scaffolds them.
+The bundle contains `comment-dev`, the replacement `code-review`, and its
+model-invoked `review-judgment` helper.
 
 ## License
 

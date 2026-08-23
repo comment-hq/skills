@@ -1,82 +1,57 @@
 ---
 name: comment-dev
-description: >-
-  The front door for pragmatic engineering delivery through Comment.io. Talk to
-  it about dev work in plain language and it picks the right path: shape a rough
-  idea (`comment-spec`), build a defined feature (`comment-feature`), fix a
-  defect (`comment-bug`), or try a fast change you'll validate later
-  (`comment-prototype`). Invoke as `$comment-dev` / `/comment-dev`, or when
-  someone describes coding work — "build / add / implement", "fix / it's
-  broken", "let me try / quick tweak / show me", "should we / scope this" —
-  without naming a specific path. When the user already named a specific skill,
-  let that one fire directly. Works identically under Codex and Claude Code.
+description: Route Matt Pocock workflows through Comment.io conventions. Invoke alone for `ask-matt`, or with a target Matt skill. Tickets use the shared Beads gateway; other artifacts use Comment.io.
 ---
 
-# comment-dev — the engineering front door
+# Comment.io wrapper for Matt's skills
 
-One thing to talk to. Describe the work; `comment-dev` classifies the intent and
-routes to the path that fits, so you don't have to remember which `comment-*`
-skill to call. It is a thin **dispatcher** — it does no delivery itself; it picks
-a path and hands off.
+Without a target Matt skill, read and follow the sibling
+[`ask-matt`](../ask-matt/SKILL.md) skill. If absent, read and follow
+`$HOME/.agents/skills/ask-matt/SKILL.md`. If neither exists, load it with
+`npx --yes skills use mattpocock/skills@ask-matt`. Follow its routing now.
 
-Every route follows the same startup bias: get the simplest useful change in
-front of real users, learn whether they love it, and add complexity only when
-evidence or a hard invariant requires it.
+`comment-dev` alone routes through `ask-matt`; a target runs directly:
 
-> Not a Comment.io *document* skill. "Make me a comm / read this doc / edit this
-> comm" is the **`comment`** skill. `comment-dev` is for *building, fixing, and
-> shaping software*.
+```text
+$comment-dev
+$comment-dev $implement <Beads ticket>
+/comment-dev
+/comment-dev /implement <Beads ticket>
+```
 
-## Routing
+Use qualified plugin names where required.
 
-Classify the request, state which path you're taking and why (one line), then run
-that skill (read its full `SKILL.md` first — naming it here does not load it):
+Follow the selected Matt skill, changing only these locations. Beads and
+Comment.io are already configured; skip `setup-matt-pocock-skills`.
 
-| The request looks like… | Route to | Why |
-|---|---|---|
-| A rough/unshaped idea; goal, scope, or product fit unsettled; "should we…", "what if…", "scope this", "is this worth doing" | **`comment-spec`** | Shape it into a crisp spec first; it then invokes `comment-feature`. |
-| A defined feature; "build / add / implement / wire up X", clear what success is | **`comment-feature`** | Choose direct/lift topology → build bounded deltas → ship. |
-| A defect/regression; "X is broken", "this throws", "stopped working", "wrong output" | **`comment-bug`** | Reproduce → failing test → fix → verify. |
-| A fast, small, or exploratory change to *look at first*; "let me try", "quick tweak", "just show me", "spike / prototype this", UI nudges before committing to the gate | **`comment-prototype`** | Implement fast, show it, skip the heavy gate; promote later. |
-| Make / read / edit a Comment.io doc itself (not code) | **`comment`** | That's a document operation, not a delivery flow. |
+## Tickets
 
-### Picking between adjacent paths
+Use the host repository's authenticated shared Beads gateway for every ticket
+read and write (`scripts/beads` in Comment Docs). Never call `bd` directly,
+initialize checkout-local state, select a database, or bypass its
+write-publication contract. Reads use the local replica; successful writes are
+published synchronously. If the gateway is unavailable, stop and hand the
+mutation to the repository coordinator.
 
-- **prototype vs feature/bug:** if the user wants to *see it before investing*,
-  or it's a handful of UI/copy tweaks, start with **`comment-prototype`** — it
-  promotes into `comment-feature`/`comment-bug` when they like it. If they want
-  it real and merge-ready from the start, go straight to feature/bug.
-- **spec vs feature:** if you can't yet state the goal and what "done" means in
-  one sentence, it's a **spec**. If you can, it's a **feature**.
-- **feature vs bug:** new capability → feature; restoring intended behavior →
-  bug.
+Preserve ticket identity, epic membership, and blocking edges. GitHub Issues is
+read-only history; never fall back to it or local Markdown.
 
-When it's genuinely ambiguous, ask **one** crisp question with your recommended
-route — don't guess on a high-cost path. When it's clear, just route and say so.
+For `grill-with-docs`, create or reuse one Beads epic. Store artifact URLs on
+it; `to-tickets` creates its child tickets and dependencies there.
 
-## What carries across the handoff
+Put spec bodies in Comment.io and link them from the epic; do not let `to-spec`
+publish them as tickets.
 
-- **Identity / worklog.** The chosen skill reuses the working Comment.io route
-  and identity already available for the task. It invokes `comment-identity`
-  only immediately before an uncredentialed direct-REST write. If the user
-  already has a worklog / Project Root URL for this task, pass it through so the
-  routed skill reuses it instead of opening a second root.
-- **Repo config.** The routed skills read this repo's setup themselves (see
-  **Repo config** below); `comment-dev` doesn't need to.
-- **Delivery topology.** The routed delivery skill reads
-  **`delivery-methodology`** and records direct versus controlled-lift choice
-  before implementation. Do not default foundational work to feature flags when
-  that would preserve two systems.
+## Documents
 
-## Repo config
+Create specs, plans, context/glossaries, ADRs, research, handoffs,
+questionnaires, and other non-ticket artifacts as Comment.io comms. Use their
+URLs wherever a Matt skill expects a path.
 
-`comment-dev` only routes, so it needs no repo specifics. The skills it routes to
-read **`AGENTS.md` (else `CLAUDE.md`)** and linked delivery/testing docs, plus
-**`delivery-methodology`**. If those are missing, the routed skill infers them or
-offers **`comment-init`** to scaffold the repo config.
-
-## Out of scope
-
-`comment-dev` never implements, tests, or ships directly — it delegates. If a
-request spans paths (e.g. "spec then build"), route to the *first* one and let
-the chain continue (`comment-spec` → `comment-feature`).
+Invoke the repository `comment` skill for every comm operation. Use an already
+available Comment.io tool, authenticated HTTPS credential, or browser session;
+otherwise follow the origin's `/llms.txt`. Do not install or invoke the retired
+CLI, daemon, local sync, or listener. The Claude and Codex plugin replacements
+are still in progress, so poll only during active turns and do not claim
+background delivery. If no writable route exists, stop instead of creating
+another artifact.
