@@ -54,6 +54,35 @@ Gateway reads use the local replica. A successful disposition write publishes
 synchronously; an ambiguous result is resolved by rereading the exact Bead, not
 by replaying the review mutation.
 
+## Architecture applicability
+
+Every engineering review starts with a cheap screen against the host
+repository's canonical future-architecture contract, when it has one. In
+Comment Docs that contract is `docs/ARCHITECTURE.md`. Read it when the target
+may add or remove an architecture node or communication edge, shift durable
+authority, reverse a deprecation, alter a latency contract, add a generic
+framework or permanent compatibility/dual-system layer, or otherwise diverge
+from the contract. An architecture node is a deployable, durable-state owner,
+or cross-boundary module, not an ordinary class or file.
+
+When the screen applies, add exactly one independent architecture-conformance
+reviewer through the same Grok runner. Give it the exact Bead, diff, and
+canonical contract by passing `--architecture-contract <file>` with the normal
+target mode. It returns one result: `conforming`, `intended architecture change`,
+or `unclear`. Named
+temporary migration edges already authorized by the contract are conforming
+until their stated deletion boundary.
+
+`Conforming` continues through the ordinary panel. `Intended architecture
+change` and `unclear` stop implementation and block merge. An intended change
+may proceed only after direct user agreement to the exact difference is
+recorded on the Bead, the canonical architecture is updated first, dependent
+Beads are replanned when necessary, and that new baseline receives independent
+review and explicit human acceptance. Reread the Bead and architecture file to
+verify those facts; reviewer inference or general approval is not a substitute.
+Use this existing review and human-gate path—do not create a second gate stack
+or architecture parser.
+
 ## Optional Matt replacement
 
 Replace the routine general reviewer with Matt Pocock's complete `code-review`
@@ -72,6 +101,26 @@ fallback.
 
 ## Panel
 
+Every panel member runs in a fresh Grok Build session through the sibling
+`scripts/grok-reviewer.sh` runner. Resolve it relative to this `SKILL.md`; the
+same path exists in flattened installs. Give the runner a complete `--brief`,
+the reviewer's `--lens`, and exactly one target mode:
+
+```text
+scripts/grok-reviewer.sh --cwd <repo> --working-tree --brief <brief> --lens <lens>
+scripts/grok-reviewer.sh --cwd <repo> --base <sha> --head <sha> --brief <brief> --lens <lens>
+scripts/grok-reviewer.sh --cwd <repo> --artifact <file> --brief <brief> --lens <lens>
+scripts/grok-reviewer.sh --cwd <repo> --base <sha> --head <sha> --brief <brief> --lens <lens> --architecture-contract <file>
+```
+
+The runner owns the Grok model and supplies a complete review packet to a
+one-turn session with no tools. Run separate
+invocations independently for a multi-member panel. A missing runner, Grok
+failure, or empty result leaves reviewer coverage incomplete: report the
+blocker and stop instead of substituting a host subagent or the active model.
+The optional Matt replacement above is the only alternate routine lane; any
+additional sensitive reviewer still uses this Grok runner.
+
 - **Routine:** one strong general reviewer covering correctness, regressions,
   and missed acceptance.
 - **Sensitive:** add one independent targeted reviewer for authorization,
@@ -87,7 +136,7 @@ code, Beads, or public review comments.
 
 ## Review and fix loop
 
-1. Run the selected reviewers independently and wait for the complete panel.
+1. Run the selected Grok reviewers independently and wait for the complete panel.
 2. Deduplicate the candidates and apply `review-judgment` to every item.
 3. If implementation is authorized, fix accepted compatible findings in one
    coherent batch and run the narrowest checks covering that batch.
