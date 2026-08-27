@@ -114,7 +114,7 @@ scripts/grok-reviewer.sh --cwd <repo> --base <sha> --head <sha> --brief <brief> 
 ```
 
 The runner owns the Grok model and supplies a complete review packet to a
-one-turn session with no tools. Run separate
+single-prompt headless session with no tools. Run separate
 invocations independently for a multi-member panel. A missing runner, Grok
 failure, or empty result leaves reviewer coverage incomplete: report the
 blocker and stop instead of substituting a host subagent or the active model.

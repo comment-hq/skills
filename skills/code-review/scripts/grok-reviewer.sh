@@ -183,8 +183,9 @@ if ! "$grok_bin" \
   --permission-mode dontAsk \
   --no-subagents \
   --disable-web-search \
-  --max-turns 3 \
-  --tools '' \
+  --max-turns 10 \
+  --tools read_file \
+  --disallowed-tools 'read_file,search_tool,use_tool' \
   --deny Edit \
   --deny Write \
   --deny Bash \
