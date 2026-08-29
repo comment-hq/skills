@@ -32,6 +32,16 @@ each affected environment and deploy path. Verify unset behavior. Generated
 payloads preserve environment-managed values unless clearing them is explicit
 and contract-tested.
 
+**Module shape:** When the target creates, grows, or splits a module, or changes
+a module's interface or responsibilities, use the existing general reviewer to
+check that cohesive behavior and invariants stay local behind a small
+interface. Flag implementations that accumulate unrelated reasons to change,
+expose internal ordering or state to callers, or split into shallow pass-through
+modules that merely move complexity around. Size alone is not a finding: accept
+substantial cohesive implementations, and recommend an extraction only when it
+gives one place clear ownership of meaningful behavior. This lens never expands
+the panel or adds an approval gate.
+
 For a PR, read its state, base, current head, changed files, prior review
 disposition, and unresolved feedback. Stop for a closed PR. Review a draft only
 when the caller intentionally chose it as the review surface.
