@@ -10,8 +10,9 @@ skill directly. It routes tickets to Beads and artifacts to Comment.io. The
 replacement review runs one general lane by default. Matt's review replaces it
 only when a line-addressable spec needs traceability or a non-tool-enforced
 standards audit is an acceptance concern. Sensitive changes add one targeted
-lens. General and targeted reviewers run as fresh, one-turn Grok sessions with
-no tools and never fall back to the active host model. Every finding is advice:
+lens. General and targeted reviewers run as fresh, pollable, single-prompt Grok
+sessions with no tools, no orchestration deadline or agent-turn cap, and no
+fallback to the active host model. Every finding is advice:
 `review-judgment` decides whether to fix, check, or decline it and how to answer
 public feedback.
 

@@ -124,10 +124,14 @@ scripts/grok-reviewer.sh --cwd <repo> --base <sha> --head <sha> --brief <brief> 
 ```
 
 The runner owns the Grok model and supplies a complete review packet to a
-single-prompt headless session with no tools. Run separate
-invocations independently for a multi-member panel. A missing runner, Grok
-failure, or empty result leaves reviewer coverage incomplete: report the
-blocker and stop instead of substituting a host subagent or the active model.
+single-prompt headless session with no tools. Launch it as a managed process
+whose stderr can be polled, without a caller wall-clock timeout or an agent-turn
+cap. Poll its progress while it is active and wait for its real exit, explicit
+human cancellation, or provider/transport failure; progress is not a review
+result. Run separate invocations independently for a multi-member panel. A
+missing runner, Grok failure, or empty result leaves reviewer coverage
+incomplete: report the blocker and stop instead of substituting a host subagent
+or the active model.
 The optional Matt replacement above is the only alternate routine lane; any
 additional sensitive reviewer still uses this Grok runner.
 

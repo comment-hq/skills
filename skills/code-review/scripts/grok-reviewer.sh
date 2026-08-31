@@ -78,7 +78,7 @@ model=${GROK_REVIEW_MODEL:-cliproxy-grok-4.6}
 umask 077
 review_workspace=$(mktemp -d "${TMPDIR:-/tmp}/grok-review-workspace.XXXXXX")
 prompt_file=$review_workspace/prompt.md
-result_file=$review_workspace/result.json
+result_file=$review_workspace/result.ndjson
 trap 'rm -rf "$review_workspace"' EXIT
 
 {
@@ -176,16 +176,16 @@ else
   rules='You are an independent code reviewer. The prompt contains the complete review packet. Do not invoke skills or tools. Return only evidence-backed candidate findings or CLEAN. You cannot modify files, Git state, task state, or external systems.'
 fi
 
-if ! "$grok_bin" \
+set +e
+"$grok_bin" \
   --cwd "$review_workspace" \
   --model "$model" \
   --reasoning-effort high \
   --permission-mode dontAsk \
   --no-subagents \
   --disable-web-search \
-  --max-turns 10 \
   --tools read_file \
-  --disallowed-tools 'read_file,search_tool,use_tool' \
+  --disallowed-tools 'read_file,search_replace,search_tool,use_tool' \
   --deny Edit \
   --deny Write \
   --deny Bash \
@@ -193,13 +193,38 @@ if ! "$grok_bin" \
   --deny MCPTool \
   --rules "$rules" \
   --verbatim \
-  --output-format json \
-  --prompt-file "$prompt_file" >"$result_file"; then
+  --include-partial-messages \
+  --output-format streaming-messages-json \
+  --prompt-file "$prompt_file" \
+  | tee "$result_file" \
+  | jq --unbuffered -r '
+      if .type == "system" and .subtype == "init" then
+        "grok-reviewer: started session \(.session_id) with \(.model)"
+      elif .type == "stream_event" and .event.type == "message_start" then
+        "grok-reviewer: review active"
+      elif .type == "stream_event"
+        and .event.type == "content_block_start"
+        and .event.content_block.type == "text" then
+        "grok-reviewer: composing result"
+      elif .type == "result" then
+        "grok-reviewer: run \(.subtype)"
+      else empty end
+    ' >&2
+pipeline_status=("${PIPESTATUS[@]}")
+set -e
+if ((pipeline_status[0] != 0 || pipeline_status[1] != 0 || pipeline_status[2] != 0)); then
   printf 'grok-reviewer: Grok Build failed; reviewer coverage is incomplete\n' >&2
   exit 70
 fi
 
-if ! review_text=$(jq -er '.text | select(type == "string" and length > 0)' "$result_file"); then
+if ! review_text=$(jq -ser '
+  [ .[] | select(.type == "result") ] as $results
+  | select($results | length == 1)
+  | $results[0]
+  | select(.subtype == "success" and .is_error == false and .stop_reason == "end_turn")
+  | .result
+  | select(type == "string" and length > 0)
+' "$result_file"); then
   printf 'grok-reviewer: Grok Build returned no review text; reviewer coverage is incomplete\n' >&2
   exit 70
 fi
