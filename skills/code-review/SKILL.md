@@ -75,23 +75,21 @@ framework or permanent compatibility/dual-system layer, or otherwise diverge
 from the contract. An architecture node is a deployable, durable-state owner,
 or cross-boundary module, not an ordinary class or file.
 
-When the screen applies, add exactly one independent architecture-conformance
-reviewer through the same Grok runner. Give it the exact Bead, diff, and
-canonical contract by passing `--architecture-contract <file>` with the normal
-target mode. It returns one result: `conforming`, `intended architecture change`,
-or `unclear`. Named
-temporary migration edges already authorized by the contract are conforming
-until their stated deletion boundary.
+When the screen applies, give one independent panel member the exact target
+and canonical contract. A targeted reviewer may cover architecture and other
+sensitive lenses together; add a separate member only when the scope warrants it.
+Return `conforming`, `intended architecture change`, or `unclear`, with the
+specific contract clause, code evidence, and explanation. Authorized temporary
+migration edges are conforming until their deletion boundary.
 
-`Conforming` continues through the ordinary panel. `Intended architecture
-change` and `unclear` stop implementation and block merge. An intended change
-may proceed only after direct user agreement to the exact difference is
-recorded on the Bead, the canonical architecture is updated first, dependent
-Beads are replanned when necessary, and that new baseline receives independent
-review and explicit human acceptance. Reread the Bead and architecture file to
-verify those facts; reviewer inference or general approval is not a substitute.
-Use this existing review and human-gate path—do not create a second gate stack
-or architecture parser.
+For `unclear`, investigate the named uncertainty and ask that reviewer to
+reassess the new evidence. Unresolved uncertainty blocks dependent implementation
+and landing, not unrelated work. For an intended change, follow the host's
+architecture proposal process. In Comment Docs, prepare and independently review
+the proposed contract and diagrams, obtain one explicit human acceptance of that
+exact baseline, record it on the Bead, then adopt it and resume dependent work.
+The existing contract remains authoritative until acceptance. A technical
+reviewer cannot provide human acceptance.
 
 ## Optional Matt replacement
 
@@ -111,29 +109,33 @@ fallback.
 
 ## Panel
 
-Every panel member runs in a fresh Grok Build session through the sibling
-`scripts/grok-reviewer.sh` runner. Resolve it relative to this `SKILL.md`; the
-same path exists in flattened installs. Give the runner a complete `--brief`,
-the reviewer's `--lens`, and exactly one target mode:
+Spawn native reviewer sub-agents by default, each with fresh context. In Codex,
+use `spawn_agent` with `fork_turns="none"`; use the equivalent fresh-context
+subagent capability in another host. Inherit the active model unless the human
+or host configuration selects another. Give each member only the task's Bead,
+requirements, acceptance sources, exact target, relevant invariants, checks
+already performed, and assigned lenses. Keep implementer reasoning and other
+reviewers' conclusions out of the initial packet.
 
-```text
-scripts/grok-reviewer.sh --cwd <repo> --working-tree --brief <brief> --lens <lens>
-scripts/grok-reviewer.sh --cwd <repo> --base <sha> --head <sha> --brief <brief> --lens <lens>
-scripts/grok-reviewer.sh --cwd <repo> --artifact <file> --brief <brief> --lens <lens>
-scripts/grok-reviewer.sh --cwd <repo> --base <sha> --head <sha> --brief <brief> --lens <lens> --architecture-contract <file>
-```
+Pin committed code to full base/head SHAs. Reviewers inspect `git diff <base>
+<head>` and `git show <head>:<path>` so concurrent worktree edits cannot change
+the subject. For uncommitted work or a plan, first capture a separate snapshot
+and its digest; identify that snapshot in the report. Give reviewers read/search
+access to surrounding code and tests. Use enforced read-only permissions when
+the host provides them; fresh context and a detached checkout alone do not
+restrict tool permissions. Otherwise state the permission limitation and require
+reviewers to use immutable Git object reads, with no file, task-state, Git, or
+external mutations. The coordinator runs any requested behavioral checks.
 
-The runner owns the Grok model and supplies a complete review packet to a
-single-prompt headless session with no tools. Launch it as a managed process
-whose stderr can be polled, without a caller wall-clock timeout or an agent-turn
-cap. Poll its progress while it is active and wait for its real exit, explicit
-human cancellation, or provider/transport failure; progress is not a review
-result. Run separate invocations independently for a multi-member panel. A
-missing runner, Grok failure, or empty result leaves reviewer coverage
-incomplete: report the blocker and stop instead of substituting a host subagent
-or the active model.
-The optional Matt replacement above is the only alternate routine lane; any
-additional sensitive reviewer still uses this Grok runner.
+Launch independent reviewers and required checks together. Wait for actual
+completion and report missing coverage on error or cancellation; progress text
+is not a result. A native reviewer failure may be retried once with a fresh
+agent and the same target. Persistent failure leaves coverage incomplete.
+
+Grok is an optional, explicitly selected second opinion for model diversity or
+a host without native subagents. Read [the Grok reference](references/grok.md)
+only for that choice. Disclose its static-packet limitation. Do not silently
+substitute a different provider for a human-selected reviewer.
 
 - **Routine:** one strong general reviewer covering correctness, regressions,
   and missed acceptance.
@@ -150,7 +152,7 @@ code, Beads, or public review comments.
 
 ## Review and fix loop
 
-1. Run the selected Grok reviewers independently and wait for the complete panel.
+1. Run the selected reviewers independently and wait for the complete panel.
 2. Deduplicate the candidates and apply `review-judgment` to every item.
 3. If implementation is authorized, fix accepted compatible findings in one
    coherent batch and run the narrowest checks covering that batch.
@@ -168,10 +170,11 @@ requires a posted PR review:
 
 ```text
 reviewed: <scope/diff>
-panel: <reviewers/lenses>
+panel: <reviewers/lenses, completed or incomplete>
 accepted: <finding + fix, or none>
 material_declines: <concern + pragmatic reason, or none>
 checks: <focused evidence>
+review_cost: <elapsed time and available token usage; unavailable when not exposed>
 residual_risk: <material remainder, or none>
 ```
 
@@ -183,3 +186,8 @@ feedback, follow `review-judgment` for its replies and thread resolution.
 
 For a controlled lift, add only receipt fields explicitly defined by the host
 repository. Routine direct work does not need a formal receipt.
+
+Record elapsed review time, candidate count, accepted findings, and material
+misses discovered later on the same Bead. Use observed outcomes to tune panel
+size and compare native and optional Grok reviews; do not add a second panel
+merely to collect metrics. Never equate reviewer agreement with proof.

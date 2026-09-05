@@ -27,12 +27,10 @@ npx skills add mattpocock/skills
 npx skills add comment-hq/skills
 ```
 
-The replacement review lane requires Grok Build plus `jq`. Configure Grok with
-the `cliproxy-grok-4.6` model through your OpenAI-compatible endpoint, or set
-`GROK_REVIEW_MODEL` to another configured Grok model ID. Reviewer sessions are
-pollable, single-prompt, no-tool processes with no orchestration deadline or
-agent-turn cap; a missing or failed Grok run blocks review instead of falling
-back to the host model.
+The replacement review uses fresh native subagents with read/search access to
+an immutable target. Use a host with native delegation; Grok Build plus jq is an
+optional explicitly selected second opinion or an alternative for hosts without
+subagents. See the bundled code-review skill for the exact workflow and limits.
 
 The order is intentional: this overlay replaces Matt's `code-review` in the
 global skill namespace. Matt's original remains available as
