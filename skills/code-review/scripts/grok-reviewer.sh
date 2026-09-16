@@ -93,7 +93,7 @@ intended architecture change, or unclear.
 Compare the supplied target with the canonical architecture contract. Use `conforming` only
 when the target follows the contract, including an explicitly authorized temporary migration
 edge. Use `intended architecture change` when the target diverges from the contract, and
-`unclear` when the evidence is insufficient. Do not edit code, Git state, Beads, or public
+`unclear` when the evidence is insufficient. Do not edit code, Git state, or public
 review threads.
 
 # Review target
@@ -104,7 +104,7 @@ EOF
 Return candidate findings only. Each finding must name a concrete current failure scenario,
 reachability, impact, code evidence with file:line, and the smallest reasonable fix. Stay within
 the supplied target; use surrounding code only to assess impact. Return exactly `CLEAN` when no
-actionable candidate exists. Do not edit code, Git state, Beads, or public review threads.
+actionable candidate exists. Do not edit code, Git state, or public review threads.
 
 # Review target
 

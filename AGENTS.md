@@ -6,7 +6,8 @@ skill is self-contained in `skills/<name>/SKILL.md`; read it before use. Install
 Matt Pocock's skills before this overlay and use a host with native subagents.
 
 Invoke `comment-dev` alone to route through `ask-matt`, or supply a target Matt
-skill directly. It routes tickets to Beads and artifacts to Comment.io. The
+skill directly. It routes optional artifacts to Comment.io. No task tracker is
+required. The
 replacement review runs one general lane by default. Matt's review replaces it
 only when a line-addressable spec needs traceability or a non-tool-enforced
 standards audit is an acceptance concern. Sensitive changes add one targeted

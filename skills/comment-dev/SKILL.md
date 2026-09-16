@@ -1,6 +1,6 @@
 ---
 name: comment-dev
-description: Route Matt Pocock workflows through Comment.io conventions. Invoke alone for `ask-matt`, or with a target Matt skill. Tickets use the shared Beads gateway; other artifacts use Comment.io.
+description: Route Matt Pocock workflows through Comment.io conventions. Invoke alone for `ask-matt`, or with a target Matt skill. Use task context and optional Comment.io artifacts without requiring a tracker.
 ---
 
 # Comment.io wrapper for Matt's skills
@@ -14,39 +14,26 @@ Without a target Matt skill, read and follow the sibling
 
 ```text
 $comment-dev
-$comment-dev $implement <Beads ticket>
+$comment-dev $implement <task context>
 /comment-dev
-/comment-dev /implement <Beads ticket>
+/comment-dev /implement <task context>
 ```
 
 Use qualified plugin names where required.
 
-Follow the selected Matt skill, changing only these locations. Beads and
-Comment.io are already configured; skip `setup-matt-pocock-skills`.
+Follow the selected Matt skill, changing only these locations. Comment.io is
+already configured when available; skip `setup-matt-pocock-skills`.
 
-## Tickets
+## Task context and documents
 
-Use the host repository's authenticated shared Beads gateway for every ticket
-read and write (`scripts/beads` in Comment Docs). Never call `bd` directly,
-initialize checkout-local state, select a database, or bypass its
-write-publication contract. Reads use the local replica; successful writes are
-published synchronously. If the gateway is unavailable, stop and hand the
-mutation to the repository coordinator.
+Use the supplied task context and conversation. Do not create or require a task
+tracker, fake gateway, local database, or GitHub Issues backlog. If a worklog is
+explicitly requested or supplied, keep it concise and use it as evidence only.
 
-Preserve ticket identity, epic membership, and blocking edges. GitHub Issues is
-read-only history; never fall back to it or local Markdown.
-
-For `grill-with-docs`, create or reuse one Beads epic. Store artifact URLs on
-it; `to-tickets` creates its child tickets and dependencies there.
-
-Put spec bodies in Comment.io and link them from the epic; do not let `to-spec`
-publish them as tickets.
+Put requested specs, plans, ADRs, and research in Comment.io when that route is
+available; do not manufacture artifacts merely to satisfy this wrapper.
 
 ## Documents
-
-Create specs, plans, context/glossaries, ADRs, research, handoffs,
-questionnaires, and other non-ticket artifacts as Comment.io comms. Use their
-URLs wherever a Matt skill expects a path.
 
 Invoke the repository `comment` skill for every comm operation. Use an already
 available Comment.io tool, authenticated HTTPS credential, or browser session;

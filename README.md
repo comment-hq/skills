@@ -5,9 +5,9 @@
 A thin explicit wrapper for
 [mattpocock/skills](https://github.com/mattpocock/skills):
 
-- tickets live in [Beads](https://github.com/gastownhall/beads), with one epic
-  created when `grill-with-docs` starts;
-- specs, plans, ADRs, research, handoffs, and other non-ticket artifacts live in
+- task context comes from the conversation and repository; no task tracker is
+  required;
+- specs, plans, ADRs, research, handoffs, and other optional artifacts live in
   Comment.io;
 - implementation closes with one risk-scaled review lane; Matt's review replaces
   the general lane only when a line-addressable spec needs traceability or a
@@ -36,12 +36,9 @@ The order is intentional: this overlay replaces Matt's `code-review` in the
 global skill namespace. Matt's original remains available as
 `mattpocock/skills@code-review`.
 
-Engineering delivery requires the host repository's authenticated shared Beads
-gateway and a writable Comment.io route. The gateway, backed by a pinned `bd`,
-owns database selection, writer serialization, and remote synchronization;
-agents never call `bd` directly or initialize checkout-local Beads state. If the
-host has no shared gateway, hand the mutation to its coordinator instead of
-creating a second task ledger. If the `comment` skill is installed, the overlay
+Engineering delivery uses the supplied task context and preserves explicit
+approval, review, and delivery safeguards. A worklog is optional evidence. If the
+`comment` skill is installed, the overlay
 invokes it so it can reuse or mint the session identity. It invokes `listen` too
 when that skill and the current runtime support idle mention delivery.
 
@@ -52,12 +49,12 @@ skill to run it directly:
 # Codex
 $comment-dev
 $comment-dev $grill-with-docs <idea>
-$comment-dev $implement <Beads ticket>
+$comment-dev $implement <task context>
 
 # Claude Code with copied skills
 /comment-dev
 /comment-dev /grill-with-docs <idea>
-/comment-dev /implement <Beads ticket>
+/comment-dev /implement <task context>
 ```
 
 The bundle contains `comment-dev`, the replacement `code-review`, and its

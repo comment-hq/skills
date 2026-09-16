@@ -46,23 +46,14 @@ For a PR, read its state, base, current head, changed files, prior review
 disposition, and unresolved feedback. Stop for a closed PR. Review a draft only
 when the caller intentionally chose it as the review surface.
 
-## Beads checkpoint
+## Task context checkpoint
 
-Every engineering review names the exact shared Bead it serves. Review the
-relevant delta against that Bead's acceptance and regression surface. For an
-epic, review independently meaningful child deltas as they complete and review
-the composed branch only when cross-child interaction could change the result.
-
-Reviewers return candidate findings only and do not claim, update, note, close,
-or reopen Beads. The orchestrating agent records the accepted and materially
-declined disposition through `scripts/beads` on the exact task or composition.
-Preserve the supplied Bead ID and expected base; do not infer them from ambient
-Git. Never call `bd` directly, initialize `.beads`, or use GitHub Issues for
-review findings.
-
-Gateway reads use the local replica. A successful disposition write publishes
-synchronously; an ambiguous result is resolved by rereading the exact Bead, not
-by replaying the review mutation.
+Review the supplied task context, acceptance criteria, and relevant conversation
+against the target. If a worklog was explicitly supplied or requested, use it as
+evidence and update only its material review disposition; it is optional and is
+never a source of authority. Do not invent a task tracker, task ID, database, or
+GitHub Issue workflow. Reviewers return candidate findings only; the coordinator
+owns the disposition and any human approval.
 
 ## Architecture applicability
 
@@ -87,7 +78,7 @@ reassess the new evidence. Unresolved uncertainty blocks dependent implementatio
 and landing, not unrelated work. For an intended change, follow the host's
 architecture proposal process. In Comment Docs, prepare and independently review
 the proposed contract and diagrams, obtain one explicit human acceptance of that
-exact baseline, record it on the Bead, then adopt it and resume dependent work.
+exact baseline, then adopt it and resume dependent work.
 The existing contract remains authoritative until acceptance. A technical
 reviewer cannot provide human acceptance.
 
@@ -112,7 +103,7 @@ fallback.
 Spawn native reviewer sub-agents by default, each with fresh context. In Codex,
 use `spawn_agent` with `fork_turns="none"`; use the equivalent fresh-context
 subagent capability in another host. Inherit the active model unless the human
-or host configuration selects another. Give each member only the task's Bead,
+or host configuration selects another. Give each member only the task context,
 requirements, acceptance sources, exact target, relevant invariants, checks
 already performed, and assigned lenses. Keep implementer reasoning and other
 reviewers' conclusions out of the initial packet.
@@ -148,7 +139,7 @@ Name every applicable sensitive domain in the brief. One qualified targeted
 reviewer may cover several named lenses. Ask reviewers for candidate findings
 with a concrete failure scenario, current reachability, impact, code evidence,
 and the smallest reasonable fix. Reviewers work independently and never write
-code, Beads, or public review comments.
+code, tracker state, or public review comments.
 
 ## Review and fix loop
 
@@ -158,8 +149,7 @@ code, Beads, or public review comments.
    coherent batch and run the narrowest checks covering that batch.
 4. If follow-up review adds value, target only the fix delta and invalidated
    invariants. Do not rerun the whole panel by default.
-5. Record the material disposition on the exact Bead when the repository uses
-   one.
+5. If a requested worklog exists, record the material disposition there.
 6. Exit when acceptance and hard invariants hold and no accepted actionable
    blocker remains.
 
@@ -188,6 +178,6 @@ For a controlled lift, add only receipt fields explicitly defined by the host
 repository. Routine direct work does not need a formal receipt.
 
 Record elapsed review time, candidate count, accepted findings, and material
-misses discovered later on the same Bead. Use observed outcomes to tune panel
+misses discovered later in the task context. Use observed outcomes to tune panel
 size and compare native and optional Grok reviews; do not add a second panel
 merely to collect metrics. Never equate reviewer agreement with proof.
