@@ -9,7 +9,7 @@
       "description": "Wrap Matt Pocock's skills with optional Comment.io artifacts and pragmatic review judgment",
       "keywords": ["workflow", "planning", "code-review", "comment-io"],
       "category": "workflow",
-      "homepage": "https://comment.io",
+      "homepage": "https://alpha.comment.io",
       "license": "MIT"
     }
   ]

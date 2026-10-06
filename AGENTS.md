@@ -17,5 +17,5 @@ opinion. Reviewers supply findings; the coordinator records actual human authori
 `review-judgment` decides whether to fix, check, or decline it and how to answer
 public feedback.
 
-Comment.io startup index: https://comment.io/llms.txt
-Exact Comment.io API reference: https://comment.io/llms/reference.txt
+Comment.io startup index: https://alpha.comment.io/llms.txt
+Exact Comment.io API reference: https://alpha.comment.io/llms/reference.txt
