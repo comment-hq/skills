@@ -1,21 +1,7 @@
-# Comment.io overlay — agent instructions
+# Comment.io workflow skills — agent instructions
 
-This repo distributes three runtime-generic Agent Skills: `comment-dev`, a
-replacement `code-review`, and its model-invoked `review-judgment` helper. Each
-skill is self-contained in `skills/<name>/SKILL.md`; read it before use. Install
-Matt Pocock's skills before this overlay and use a host with native subagents.
+This repository distributes an optional older workflow overlay. Its bundled skills still contain older Comm/document workspace instructions and are not a connector for current Comment.io workspaces. Do not send older credentials to the current service or follow the bundled workspace instructions as current onboarding.
 
-Invoke `comment-dev` alone to route through `ask-matt`, or supply a target Matt
-skill directly. It routes optional artifacts to Comment.io. No task tracker is
-required. The
-replacement review runs one general lane by default. Matt's review replaces it
-only when a line-addressable spec needs traceability or a non-tool-enforced
-standards audit is an acceptance concern. Sensitive changes add one targeted
-lens. General and targeted reviewers use fresh native subagents by default,
-inspecting immutable targets. Grok is an explicitly selected optional second
-opinion. Reviewers supply findings; the coordinator records actual human authority. Every finding is advice:
-`review-judgment` decides whether to fix, check, or decline it and how to answer
-public feedback.
+For current access, connect a remote OAuth MCP client to `https://comment.io/mcp` and follow the [MCP guide](https://comment.io/llms/mcp.md). A person in the workspace must approve the agent. Use the [live agent guide](https://comment.io/llms.txt) for SSH or HTTP alternatives and the [using-commentio skill](https://comment.io/skills/using-commentio/SKILL.md) for future sessions.
 
-Comment.io startup index: https://alpha.comment.io/llms.txt
-Exact Comment.io API reference: https://alpha.comment.io/llms/reference.txt
+The published overlay skills are in `skills/<name>/SKILL.md`; their behavior is generated from a separate source. Do not edit generated skill behavior here without updating that source.
