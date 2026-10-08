@@ -1,15 +1,15 @@
 {
   "name": "comment-io-skills",
-  "owner": { "name": "Comment.io", "email": "hello@comment.io" },
-  "metadata": { "description": "Comment.io and pragmatic review for Matt Pocock's skills" },
+  "owner": { "name": "Comment.io", "email": "support@comment.io" },
+  "metadata": { "description": "Comment.io shared document access for agents" },
   "plugins": [
     {
-      "name": "comment-workflow",
+      "name": "using-commentio",
       "source": "./",
-      "description": "Wrap Matt Pocock's skills with optional Comment.io artifacts and pragmatic review judgment",
-      "keywords": ["workflow", "planning", "code-review", "comment-io"],
+      "description": "Use Comment.io shared documents with the using-commentio skill",
+      "keywords": ["comment-io", "documents", "agents"],
       "category": "workflow",
-      "homepage": "https://alpha.comment.io",
+      "homepage": "https://github.com/comment-hq/skills",
       "license": "MIT"
     }
   ]
