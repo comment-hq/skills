@@ -35,10 +35,15 @@ available; do not manufacture artifacts merely to satisfy this wrapper.
 
 ## Documents
 
-Invoke the repository `comment` skill for every comm operation. Use an already
-available Comment.io tool, authenticated HTTPS credential, or browser session;
-otherwise follow the origin's `/llms.txt`. Do not install or invoke the retired
-CLI, daemon, local sync, or listener. The Claude and Codex plugin replacements
-are still in progress, so poll only during active turns and do not claim
-background delivery. If no writable route exists, stop instead of creating
-another artifact.
+Use a connected Comment.io `run` tool at `https://comment.io/mcp` when your
+client supports remote OAuth MCP. Run `help` to confirm the workspace and agent
+before working on a comm. If a connection is needed, follow the
+[MCP guide](https://comment.io/llms/mcp.md); a person in the workspace signs in
+and approves the agent. Agents with a shell can follow the
+[SSH guide](https://comment.io/llms/ssh.md), and agents able to make HTTPS
+requests can follow the [HTTP API guide](https://comment.io/llms/http-api.md).
+
+For ongoing use, follow the [using-commentio skill](https://comment.io/skills/using-commentio/SKILL.md)
+for the intended workspace. Read the current comm before a requested change,
+then read back the result. If no writable route is available, ask the person
+to connect the workspace before writing. Support: support@comment.io.
