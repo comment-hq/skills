@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review Judgment"
-  short_description: "Pragmatically decide which review items matter"
-  default_prompt: "Use $review-judgment to decide which review items to fix, check, or decline."
